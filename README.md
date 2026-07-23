@@ -1,4 +1,4 @@
-# Configuratore Tesi
+# iot-learning-ar
 
 A web-based prototype for creating, configuring, and viewing interactive 3D learning experiences.
 
