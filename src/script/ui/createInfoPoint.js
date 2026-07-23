@@ -22,7 +22,7 @@ class InfoPointRuntime {
     this.renderer = this.core.renderer;
     this.modelRoot = this.core.modelRoot;
     this.markerRoot = viewer.model?.pivot || this.modelRoot;
-    this.root = document.querySelector("#control .control-inner") || document.querySelector("#control");
+    this.root = document.querySelector("#imperative-control-root") || document.querySelector("#control .control-inner") || document.querySelector("#control");
 
 
 

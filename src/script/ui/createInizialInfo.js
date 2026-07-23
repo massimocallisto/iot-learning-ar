@@ -2,7 +2,7 @@
 import { renderMarkdownToElement } from "./renderMarkdown.js";
 
 export function createInizialInfo(viewer, testo) {
-    const root = document.querySelector("#control .control-inner") || document.querySelector("#control");
+    const root = document.querySelector("#imperative-control-root") || document.querySelector("#control .control-inner") || document.querySelector("#control");
     if (!root) return;
 
     const section = document.createElement("section");

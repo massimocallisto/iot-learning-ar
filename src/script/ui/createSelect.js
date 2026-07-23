@@ -1,4 +1,4 @@
-import { jsonStore } from "../config/ConfJson";
+import { jsonStore } from "../config/ConfJson.js";
 
 export async function createSelect(viewer) {
   // Costruisce select materiali dinamiche in base ai gruppi del JSON.

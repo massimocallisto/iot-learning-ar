@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createMarkdownEditor } from "./createMarkdownEditor";
+import { createMarkdownEditor } from "./createMarkdownEditor.js";
 
 export class ConfigInformationPoint{
     constructor(core, root){

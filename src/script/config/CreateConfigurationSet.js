@@ -1,13 +1,13 @@
-import { buildConfigJson } from "./writeJson";
-import { ConfigInformationEnd } from "./ConfigInformationEnd";
-import { ConfigInfortationStart } from "./ConfigInformationStart";
-import { ConfigInformationPoint } from "./ConfigInformationPoint";
+import { buildConfigJson } from "./writeJson.js";
+import { ConfigInformationEnd } from "./ConfigInformationEnd.js";
+import { ConfigInfortationStart } from "./ConfigInformationStart.js";
+import { ConfigInformationPoint } from "./ConfigInformationPoint.js";
 
 
 export class createConfigurationSet {
     constructor(viewer){
         this.viewer = viewer;
-        this.root = document.querySelector("#control .control-inner") || document.querySelector("#control");
+        this.root = document.querySelector("#imperative-control-root") || document.querySelector("#control .control-inner") || document.querySelector("#control");
         this.informationStart = new ConfigInfortationStart(this.root);
         this.informationEnd = new ConfigInformationEnd(this.root);
         this.infoPoint = new ConfigInformationPoint(this.viewer.core, this.root);

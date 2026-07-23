@@ -1,4 +1,4 @@
-import * as handlerJson from "../handler/handlerJson";
+import * as handlerJson from "../handler/handlerJson.js";
 
 class ConfJson {
    #data= null; 

@@ -1,8 +1,8 @@
-import { jsonStore } from "../config/ConfJson";
-import { createARButton } from "../ui/createARButton";
-import { createFinalInfo } from "../ui/createFinalInfo";
-import { createInizialInfo } from "../ui/createInizialInfo";
-import { createInfoPoint } from "../ui/createInfoPoint";
+import { jsonStore } from "../config/ConfJson.js";
+import { createARButton } from "../ui/createARButton.js";
+import { createFinalInfo } from "../ui/createFinalInfo.js";
+import { createInizialInfo } from "../ui/createInizialInfo.js";
+import { createInfoPoint } from "../ui/createInfoPoint.js";
 
 export async function loadVariant(viewer){
     // Interpreta le regole in ordine e costruisce UI/comportamenti runtime.

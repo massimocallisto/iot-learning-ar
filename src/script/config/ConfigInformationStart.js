@@ -1,4 +1,4 @@
-import { createMarkdownEditor } from "./createMarkdownEditor";
+import { createMarkdownEditor } from "./createMarkdownEditor.js";
 
 export class ConfigInfortationStart{
     constructor(root){
