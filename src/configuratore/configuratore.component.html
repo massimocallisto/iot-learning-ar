@@ -1,0 +1,142 @@
+  <div id="setup-container" class="min-vh-100 d-flex align-items-center bg-light">
+    <button
+      class="user-menu-button"
+      type="button"
+      aria-label="Apri dashboard docente"
+      [attr.aria-expanded]="isDashboardOpen"
+      (click)="toggleDashboard()">
+      <span class="user-menu-initial">{{ teacher?.name?.charAt(0) || 'D' }}</span>
+    </button>
+
+    @if (isDashboardOpen) {
+      <div class="dashboard-backdrop" (click)="toggleDashboard()"></div>
+      <section class="teacher-dashboard" role="dialog" aria-modal="true" aria-label="Dashboard docente">
+        <div class="dashboard-header">
+          <div>
+            <h2>Dashboard docente</h2>
+            <p>Profilo e gestione esperienze</p>
+          </div>
+          <button class="dashboard-close" type="button" aria-label="Chiudi dashboard" (click)="toggleDashboard()">x</button>
+        </div>
+
+        @if (dashboardError) {
+          <div class="alert alert-danger dashboard-alert" role="alert">{{ dashboardError }}</div>
+        }
+
+        <section class="dashboard-section">
+          <div class="section-title">Docente</div>
+
+          @if (isTeacherLoading && !teacher) {
+            <p class="empty-state">Caricamento profilo...</p>
+          } @else if (teacher) {
+            <div class="teacher-profile">
+              <div>
+                <span>Nome</span>
+                <strong>{{ teacher.name }}</strong>
+              </div>
+              <div>
+                <span>Email</span>
+                <strong>{{ teacher.email }}</strong>
+              </div>
+              <div>
+                <span>Codice docente</span>
+                <strong class="teacher-code">{{ teacher.accessCode }}</strong>
+              </div>
+            </div>
+          }
+        </section>
+
+        <section class="dashboard-section experiences-section">
+          <div class="section-heading-row">
+            <div class="section-title">Esperienze</div>
+            <button class="btn btn-sm btn-outline-primary" type="button" (click)="refreshExperiences()" [disabled]="isExperiencesLoading">
+              Aggiorna
+            </button>
+          </div>
+
+          @if (isExperiencesLoading) {
+            <p class="empty-state">Caricamento esperienze...</p>
+          } @else if (experiences.length) {
+            <div class="experience-list">
+              @for (experience of experiences; track experience.id) {
+                <article class="experience-card">
+                  <div>
+                    <h3>{{ experience.title }}</h3>
+                    <p>{{ experience.description || 'Nessuna descrizione.' }}</p>
+                    <span>Ultima modifica: {{ experience.updatedAt }}</span>
+                  </div>
+                  <div class="experience-actions">
+                    <button class="btn btn-sm btn-primary" type="button" (click)="editExperience(experience)">
+                      Modifica
+                    </button>
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      type="button"
+                      (click)="deleteExperience(experience)"
+                      [disabled]="deletingExperienceId === experience.id">
+                      {{ deletingExperienceId === experience.id ? 'Elimino...' : 'Elimina' }}
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          } @else {
+            <p class="empty-state">Non ci sono ancora esperienze salvate.</p>
+          }
+        </section>
+
+        <button class="btn btn-outline-danger w-100" type="button" (click)="logout()">Esci</button>
+      </section>
+    }
+
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-12 col-md-10 col-lg-7 col-xl-6">
+          <div class="card shadow border-0 rounded-4">
+            <div class="card-body p-4 p-md-5">
+              <div class="text-center mb-4">
+                <h1 class="h3 mb-1">Crea un esperienza</h1>
+                <p class="text-muted mb-0">Carica il file richiesto.</p>
+              </div>
+
+              <!-- GLB -->
+              <div class="mb-3">
+                <label for="glb" class="form-label fw-semibold">Modello base</label>
+                <div class="input-group">
+                  <span class="input-group-text">🧩</span>
+                  <input type="file" id="glb" accept=".glb" class="form-control" />
+                </div>
+                <div class="form-text">Carica un file .glb</div>
+              </div>
+
+              <!-- CTA (UNICO BOTTONE) -->
+              <button
+                id="generateBtn"
+                type="button"
+                class="btn btn-primary btn-lg w-100"
+                (click)="upload()"
+                [disabled]="isLoading"
+              >
+                @if (isLoading) {
+                  <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                  Caricamento...
+                } @else {
+                  Crea
+                }
+              </button>
+
+              <div class="d-flex gap-2 mt-3 flex-wrap">
+                <span class="badge text-bg-secondary">GLB</span>
+              </div>
+            </div>
+          </div>
+
+      
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+

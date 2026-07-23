@@ -1,0 +1,141 @@
+{
+  "groups": [
+    {
+      "groupName": "piedino",
+      "meshs": [
+        "Mesh_3",
+        "Mesh_4",
+        "Mesh_5",
+        "Mesh_3001",
+        "Mesh_4001",
+        "Mesh_5001",
+        "Mesh_3002",
+        "Mesh_4002",
+        "Mesh_5002",
+        "Mesh_3003",
+        "Mesh_4003",
+        "Mesh_5003"
+      ]
+    },
+    {
+      "groupName": "top",
+      "meshs": ["Mesh_7"]
+    },
+    {
+      "groupName": "zoccolo",
+      "meshs": ["Mesh_11", "Mesh_9", "Mesh_10"]
+    },
+    {
+      "groupName": "cassa",
+      "meshs": [
+        "pannello002",
+        "pannello003",
+        "pannello004",
+        "pannello",
+        "pannello001",
+        "pannello005"
+      ]
+    }
+  ],
+
+  "regole": [
+    {
+      "tipologia": "dim",
+      "dimensions" : ["x","y","z"],
+      "min":"20",
+      "max":"200", 
+      "passo": "5" },
+
+      
+
+    { 
+      "tipologia": "color-variant",
+      "specifica" : [
+        {
+          "groupName": "top",
+          "material": [
+            {
+              "name": "Default",
+              "value": "Default"
+            }
+            ,{
+              "name": "Wood",
+              "value": "texture/WoodTexture.jpg",
+              "type": "texture"
+            }
+          ] 
+        },
+        {
+          "groupName": "piedino",
+          "material" :[
+            {
+              "name": "Default",
+              "value": "Default"
+            },
+            {
+              "name": "Green",
+              "value": "green",
+              "type": "standard"
+            },
+            {
+              "name": "Red",
+              "value": "red",
+              "type": "standard"
+            }
+
+          ]
+        },
+        {
+          "groupName": "zoccolo",
+          "material" : [
+            {
+              "name": "Default",
+              "value": "Default"
+            },
+            {
+              "name": "Wood",
+              "value": "texture/WoodTexture.jpg",
+              "type": "texture"
+            },
+            {
+              "name": "Green",
+              "value": "green",
+              "type": "standard"
+            }
+         
+          ]
+        },
+        {
+          "groupName": "cassa",
+          "material":[
+            {
+              "name": "Default",
+              "value": "Default"
+            },
+            {
+              "name": "Wood",
+              "value": "texture/WoodTexture.jpg",
+              "type": "texture"
+            },
+            {
+              "name": "Green",
+              "value": "green",
+              "type": "standard"
+            }
+         
+          ]
+        }             
+      ]
+    },
+
+
+    {
+      "tipologia":"visible", 
+      "parte" : "pannello005"
+    },
+
+    {
+      "tipologia": "ar"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.auth-links a {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field .form-control {
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #495057;
+  transform: translateY(-50%);
+}
+
+.password-toggle:hover {
+  background: #eef2ff;
+  color: #0d6efd;
+}

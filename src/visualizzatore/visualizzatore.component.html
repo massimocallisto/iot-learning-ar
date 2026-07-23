@@ -1,0 +1,72 @@
+<div id="setup-container" class="student-page min-vh-100 bg-light">
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-12 col-lg-8 col-xl-7">
+        <section class="student-panel">
+          <div class="student-header">
+            <div>
+              <h1>Accesso studente</h1>
+              <p>Inserisci il codice docente e scegli l'esperienza da visualizzare.</p>
+            </div>
+            <a class="btn btn-outline-secondary" routerLink="/">Home</a>
+          </div>
+
+          <form class="code-form" (ngSubmit)="searchExperiences()">
+            <label class="form-label fw-semibold" for="teacherCode">Codice docente</label>
+            <div class="input-group input-group-lg">
+              <input
+                id="teacherCode"
+                class="form-control code-input"
+                type="text"
+                name="teacherCode"
+              
+                autocomplete="off"
+                [(ngModel)]="code">
+              <button class="btn btn-primary" type="submit" [disabled]="isLoading">
+                @if (isLoading) {
+                  <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                  Cerco...
+                } @else {
+                  Cerca
+                }
+              </button>
+            </div>
+          </form>
+
+          @if (error) {
+            <div class="alert alert-danger mb-0" role="alert">{{ error }}</div>
+          }
+
+          @if (result) {
+            <section class="results-section">
+              <div class="teacher-result">
+                <span>Docente</span>
+                <strong>{{ result.teacher.name }}</strong>
+                <small>{{ result.teacher.accessCode }}</small>
+              </div>
+
+              @if (result.experiences.length) {
+                <div class="experience-list">
+                  @for (experience of result.experiences; track experience.id) {
+                    <article class="student-experience-card">
+                      <div>
+                        <h2>{{ experience.title }}</h2>
+                        <p>{{ experience.description || 'Nessuna descrizione disponibile.' }}</p>
+                        <span>Ultima modifica: {{ experience.updatedAt }}</span>
+                      </div>
+                      <button class="btn btn-primary" type="button" (click)="openExperience(experience)">
+                        Apri esperienza
+                      </button>
+                    </article>
+                  }
+                </div>
+              } @else {
+                <p class="empty-state">Questo docente non ha ancora esperienze disponibili.</p>
+              }
+            </section>
+          }
+        </section>
+      </div>
+    </div>
+  </div>
+</div>

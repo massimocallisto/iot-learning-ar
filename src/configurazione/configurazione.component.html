@@ -1,0 +1,59 @@
+ <!-- LAYOUT PRINCIPALE -->
+  <div class="layout">
+    <button id="ui-fab" class="ui-fab" aria-label="Apri controlli">☰</button>
+
+    <!-- SINISTRA: PANNELLO CONTROLLI -->
+    <aside class="control" id="control">
+      <div class="control-inner">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <strong>Configurazione</strong>
+          <!--TEST-->
+
+        </div>
+        <section class="ctrl-section experience-metadata-section">
+          <div class="ctrl-title">Esperienza</div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="experienceTitle">Titolo</label>
+            <input
+              id="experienceTitle"
+              class="form-control"
+              type="text"
+              name="experienceTitle"
+              placeholder="Inserire titolo espeienza"
+              [(ngModel)]="experienceTitle">
+          </div>
+
+          <div>
+            <label class="form-label fw-semibold" for="experienceDescription">Descrizione</label>
+            <textarea
+              id="experienceDescription"
+              class="form-control"
+              name="experienceDescription"
+              rows="3"
+              placeholder="Descrivi brevemente cosa vedra lo studente"
+              [(ngModel)]="experienceDescription"></textarea>
+          </div>
+
+          @if (isSavingExperience) {
+            <div class="alert alert-info mt-3 mb-0" role="status">Salvataggio esperienza in corso...</div>
+          }
+
+          @if (saveMessage) {
+            <div class="alert alert-success mt-3 mb-0" role="status">{{ saveMessage }}</div>
+          }
+
+          @if (saveError) {
+            <div class="alert alert-danger mt-3 mb-0" role="alert">{{ saveError }}</div>
+          }
+        </section>
+        <!-- qui dentro i controlli generati via JS -->
+      </div>
+    </aside>
+
+    <!-- DESTRA: VIEWER -->
+    <main #viewerHost id="viewerHost" class="viewer">
+      <canvas #threeCanvas id="threeCanvas"></canvas>
+
+    </main>
+  </div>

@@ -1,0 +1,32 @@
+{
+  "groups": [
+    {
+      "groupName": "piedini",
+      "meshs": ["mesh_0_1"
+        
+      ]
+    },
+    {
+      "groupName": "top",
+      "meshs": []
+    },
+    {
+      "groupName": "zoccolo",
+      "meshs": [
+     
+      ]
+    },
+    {
+      "groupName": "cassa",
+      "meshs": [
+        
+      ]
+    }
+  ],
+
+  "regole": [
+    { "tipologia": "dim", "dimensions" : ["x","z"] },
+    { "tipologia": "color-variant" },
+    {"tipologia":"visible", "parte" : "pannello005"}
+  ]
+}

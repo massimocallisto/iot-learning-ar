@@ -1,0 +1,22 @@
+ <!-- LAYOUT PRINCIPALE -->
+  <div class="layout">
+    <button id="ui-fab" class="ui-fab" aria-label="Apri controlli">☰</button>
+
+    <!-- SINISTRA: PANNELLO CONTROLLI -->
+    <aside class="control" id="control">
+      <div class="control-inner">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <!--TEST-->
+          <div id="gesture-debug"></div>
+
+        </div>
+        <!-- qui dentro i controlli generati via JS -->
+      </div>
+    </aside>
+
+    <!-- DESTRA: VIEWER -->
+    <main #viewerHost id="viewerHost" class="viewer">
+      <canvas #threeCanvas id="threeCanvas"></canvas>
+
+    </main>
+  </div>

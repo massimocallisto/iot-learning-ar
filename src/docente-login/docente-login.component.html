@@ -1,0 +1,68 @@
+<div class="auth-page min-vh-100 d-flex align-items-center bg-light">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 col-lg-5">
+        <div class="card shadow border-0 rounded-4">
+          <div class="card-body p-4 p-md-5">
+            <div class="mb-4">
+              <h1 class="h3 mb-1">Accesso docente</h1>
+              <p class="text-muted mb-0">Accedi per creare e gestire le tue esperienze.</p>
+            </div>
+
+            @if (error) {
+              <div class="alert alert-danger" role="alert">{{ error }}</div>
+            }
+
+            <form (ngSubmit)="submit()">
+              <div class="mb-3">
+                <label class="form-label" for="email">Email</label>
+                <input
+                  id="email"
+                  class="form-control"
+                  type="email"
+                  name="email"
+                  autocomplete="email"
+                  required
+                  [(ngModel)]="email">
+              </div>
+
+              <div class="mb-4">
+                <label class="form-label" for="password">Password</label>
+                <div class="password-field">
+                  <input
+                    id="password"
+                    class="form-control"
+                    [type]="showPassword ? 'text' : 'password'"
+                    name="password"
+                    autocomplete="current-password"
+                    required
+                    [(ngModel)]="password">
+                  <button
+                    class="password-toggle"
+                    type="button"
+                    [attr.aria-label]="showPassword ? 'Nascondi password' : 'Mostra password'"
+                    (click)="togglePasswordVisibility()">
+                    @if (showPassword) {
+                      <span aria-hidden="true">&#128065;&#xfe0e;</span>
+                    } @else {
+                      <span aria-hidden="true">&#128065;&#xfe0e;</span>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              <button class="btn btn-primary btn-lg w-100" type="submit" [disabled]="isLoading">
+                {{ isLoading ? 'Accesso in corso...' : 'Accedi' }}
+              </button>
+            </form>
+
+            <div class="auth-links">
+              <a routerLink="/">Torna alla home</a>
+              <a routerLink="/docente/registrazione">Crea account docente</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

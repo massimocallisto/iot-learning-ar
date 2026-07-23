@@ -1,0 +1,234 @@
+.user-menu-button {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1050;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(13, 110, 253, 0.22);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0d6efd;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+}
+
+.user-menu-button:hover {
+  border-color: #0d6efd;
+  background: #f8fbff;
+}
+
+.user-menu-initial {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.dashboard-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1055;
+  background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(4px);
+}
+
+.teacher-dashboard {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+  padding: 26px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  background: #ffffff;
+  color: #18212f;
+  border: 1px solid rgba(222, 226, 230, 0.92);
+  border-radius: 8px;
+  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.32);
+  transform: translate(-50%, -50%);
+}
+
+.dashboard-header,
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.dashboard-header h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.dashboard-header p {
+  margin: 4px 0 0;
+  color: #6c757d;
+}
+
+.dashboard-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #d7dde6;
+  border-radius: 8px;
+  background: #f8f9fa;
+  color: #212529;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dashboard-close:hover {
+  border-color: #0d6efd;
+  background: #eef5ff;
+  color: #0d6efd;
+}
+
+.dashboard-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e7ebf0;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.dashboard-alert {
+  margin: 0;
+}
+
+.section-title {
+  color: #6c757d;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.teacher-profile {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.teacher-profile div {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.teacher-profile div:last-child {
+  grid-column: 1 / -1;
+}
+
+.teacher-profile span,
+.experience-card span {
+  color: #6c757d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.teacher-profile strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.teacher-code {
+  color: #0d6efd;
+  letter-spacing: 0.04em;
+}
+
+.experience-list {
+  display: grid;
+  gap: 10px;
+}
+
+.experience-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.experience-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.experience-card h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.experience-card p {
+  margin: 0 0 7px;
+  color: #6c757d;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed #ced4da;
+  border-radius: 8px;
+  color: #6c757d;
+  background: #f8f9fa;
+}
+
+@media (max-width: 576px) {
+  .user-menu-button {
+    top: 12px;
+    right: 12px;
+  }
+
+  .teacher-dashboard {
+    width: 100vw;
+    max-height: 100dvh;
+    padding: 18px;
+    border-radius: 0;
+  }
+
+  .experience-card {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-actions {
+    width: 100%;
+  }
+
+  .experience-actions .btn {
+    flex: 1;
+  }
+
+  .teacher-profile {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-profile div:last-child {
+    grid-column: auto;
+  }
+}

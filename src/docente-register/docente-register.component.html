@@ -1,0 +1,88 @@
+<div class="auth-page min-vh-100 d-flex align-items-center bg-light">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 col-lg-5">
+        <div class="card shadow border-0 rounded-4">
+          <div class="card-body p-4 p-md-5">
+            <div class="mb-4">
+              <h1 class="h3 mb-1">Registrazione docente</h1>
+              <p class="text-muted mb-0">Crea un account e ottieni il codice da condividere con gli studenti.</p>
+            </div>
+
+            @if (error) {
+              <div class="alert alert-danger" role="alert">{{ error }}</div>
+            }
+
+            @if (teacher) {
+              <div class="alert alert-success" role="status">
+                <strong>Account creato.</strong>
+                <div>Codice docente: <span class="teacher-code">{{ teacher.accessCode }}</span></div>
+              </div>
+
+              <button class="btn btn-primary btn-lg w-100" type="button" (click)="goToConfigurator()">
+                Vai al configuratore
+              </button>
+            } @else {
+              <form (ngSubmit)="submit()">
+                <div class="mb-3">
+                  <label class="form-label" for="name">Nome docente</label>
+                  <input
+                    id="name"
+                    class="form-control"
+                    type="text"
+                    name="name"
+                    autocomplete="name"
+                    required
+                    [(ngModel)]="name">
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label" for="email">Email</label>
+                  <input
+                    id="email"
+                    class="form-control"
+                    type="email"
+                    name="email"
+                    autocomplete="email"
+                    required
+                    [(ngModel)]="email">
+                </div>
+
+                <div class="mb-4">
+                  <label class="form-label" for="password">Password</label>
+                  <div class="password-field">
+                    <input
+                      id="password"
+                      class="form-control"
+                      [type]="showPassword ? 'text' : 'password'"
+                      name="password"
+                      autocomplete="new-password"
+                      minlength="8"
+                      required
+                      [(ngModel)]="password">
+                    <button
+                      class="password-toggle"
+                      type="button"
+                      [attr.aria-label]="showPassword ? 'Nascondi password' : 'Mostra password'"
+                      (click)="togglePasswordVisibility()">
+                      <span aria-hidden="true">&#128065;&#xfe0e;</span>
+                    </button>
+                  </div>
+                </div>
+
+                <button class="btn btn-primary btn-lg w-100" type="submit" [disabled]="isLoading">
+                  {{ isLoading ? 'Creazione in corso...' : 'Crea account' }}
+                </button>
+              </form>
+            }
+
+            <div class="auth-links">
+              <a routerLink="/">Torna alla home</a>
+              <a routerLink="/docente/login">Ho gia un account</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
