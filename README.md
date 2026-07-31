@@ -425,3 +425,100 @@ Before production deployment, the following aspects should be reviewed:
 ## License
 
 Add the project license here.
+
+
+
+
+# Flask backend replacement
+
+This folder contains a Flask implementation of the original Node/Express backend.
+It preserves the same SQLite schema and HTTP API used by the frontend.
+
+## Install
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+On Windows PowerShell:
+
+```powershell
+cd flask_backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+## Run in HTTPS mode
+
+Generate certificates in the project root, for example:
+
+```bash
+mkdir -p ssl
+mkcert -cert-file ssl/localhost+2.pem -key-file ssl/localhost+2-key.pem localhost 127.0.0.1 ::1
+```
+
+Then run:
+
+```bash
+python app.py
+```
+
+The backend starts on:
+
+```text
+https://localhost:3001
+```
+
+## API compatibility
+
+Implemented endpoint groups:
+
+```text
+GET    /api/health
+POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/me
+GET    /api/experiences
+POST   /api/experiences
+GET    /api/experiences/:id
+GET    /api/experiences/:id/glb
+GET    /api/experiences/:id/json
+PUT    /api/experiences/:id
+DELETE /api/experiences/:id
+GET    /api/public/teachers/:code/experiences
+GET    /api/public/experiences/:id/glb
+GET    /api/public/experiences/:id/json
+POST   /api/uploads
+POST   /api/upload
+GET    /api/uploads/:id
+GET    /api/uploads/:id/glb
+GET    /api/uploads/:id/json
+DELETE /api/uploads/:id
+GET    /api/textures
+GET    /textures/:file
+```
+
+## Notes
+
+The SQLite database is stored in:
+
+```text
+backend/data/app.db
+```
+
+Persistent experience files are stored in:
+
+```text
+backend/storage/experiences/<experienceId>/
+```
+
+Temporary uploads are stored in:
+
+```text
+backend/storage/<uploadId>/
+```
+
