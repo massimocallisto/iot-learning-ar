@@ -6,7 +6,6 @@ import os
 import random
 import re
 import shutil
-import ssl
 import threading
 import time
 import unicodedata
@@ -17,10 +16,10 @@ from typing import Any
 
 import bcrypt
 import jwt
-from flask import Flask, Response, g, jsonify, request, send_file
+from flask import Flask, Response, jsonify, request, send_file
 from flask_cors import CORS
 
-from db import connect, execute, fetch_all, fetch_one, init_db
+from db import execute, fetch_all, fetch_one, init_db
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = BASE_DIR.parent
@@ -31,11 +30,11 @@ CORS_ORIGIN = os.getenv("CORS_ORIGIN", "*")
 STORE_DIR = BASE_DIR / "storage"
 TTL_MS = int(os.getenv("UPLOAD_TTL_MS", str(30 * 60 * 1000)))
 MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", str(80 * 1024 * 1024)))
-HTTPS_KEY_PATH = os.getenv("HTTPS_KEY_PATH", "ssl/localhost+2-key.pem").strip()
-HTTPS_CERT_PATH = os.getenv("HTTPS_CERT_PATH", "ssl/localhost+2.pem").strip()
+HTTPS_KEY_PATH = os.getenv("HTTPS_KEY_PATH", str(BASE_DIR / "ssl" / "localhost+2-key.pem")).strip()
+HTTPS_CERT_PATH = os.getenv("HTTPS_CERT_PATH", str(BASE_DIR / "ssl" / "localhost+2.pem")).strip()
 HTTPS_ONLY = os.getenv("HTTPS_ONLY", "true").lower() == "true"
 TEXTURES_DIR = PROJECT_DIR / "public" / "texture"
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me-at-least-32-bytes")
 JWT_EXPIRES_IN = os.getenv("JWT_EXPIRES_IN", "7d")
 BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 

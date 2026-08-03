@@ -1,12 +1,14 @@
 export function getApiBase() {
   const configured = import.meta.env.VITE_API_BASE_URL;
   if (configured) return configured.replace(/\/$/, '');
+  if (import.meta.env.DEV) return '/api';
   return `${window.location.protocol}//${window.location.hostname}:3001/api`;
 }
 
 export function getApiOrigin() {
   const configured = import.meta.env.VITE_API_ORIGIN;
   if (configured) return configured.replace(/\/$/, '');
+  if (import.meta.env.DEV) return '';
   return `${window.location.protocol}//${window.location.hostname}:3001`;
 }
 

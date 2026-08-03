@@ -9,7 +9,7 @@ The application allows a teacher to upload a 3D model, configure Points of Inter
 The project is composed of two main parts:
 
 - **Frontend**: React/Vite web application used by teachers and students.
-- **Backend**: Node.js/Express API used for authentication, experience management, file upload, and public student access.
+- **Backend**: Python/Flask API used for authentication, experience management, file upload, and public student access.
 
 Main user flows:
 
@@ -24,8 +24,8 @@ Main user flows:
 
 Before running the project, make sure you have the following tools installed:
 
-- **Node.js** 18 or higher.
-- **npm** 9 or higher.
+- **Python** 3.10 or higher (backend).
+- **Node.js** 18 or higher and **npm** 9 or higher (frontend only).
 - **Git**.
 - **mkcert**, used to generate trusted local SSL certificates.
 - A modern browser such as Chrome, Edge, or Firefox.
@@ -45,6 +45,12 @@ Install project dependencies:
 
 ```bash
 npm install
+```
+
+Install the Python backend dependencies:
+
+```bash
+python -m pip install -r backend/requirements.txt
 ```
 
 ## SSL certificate generation
@@ -136,7 +142,7 @@ cd configuratore_tesi
 In the first terminal:
 
 ```bash
-npm run backend:https:local
+python backend/app.py
 ```
 
 The backend will be available at:
@@ -229,7 +235,7 @@ https://192.168.1.50:3001
 
 > Note: the external device must trust the generated certificate. For stable testing on tablets or headsets, consider installing the mkcert root CA on the device or exposing the application through a trusted HTTPS tunnel.
 
-## Available npm scripts
+## Available commands
 
 ### Start frontend in HTTPS mode
 
@@ -246,7 +252,7 @@ https://localhost:4200
 ### Start backend in HTTPS mode
 
 ```bash
-npm run backend:https:local
+python backend/app.py
 ```
 
 Starts the backend API server on:
@@ -258,7 +264,7 @@ https://localhost:3001
 ### Start backend without HTTPS
 
 ```bash
-npm run backend
+HTTPS_KEY_PATH='' HTTPS_CERT_PATH='' HTTPS_ONLY=false python3 backend/app.py
 ```
 
 Starts the backend API server using plain HTTP.
@@ -289,7 +295,7 @@ When accessing the application from another device, use the IP address of your d
 VITE_API_BASE_URL=https://192.168.1.50:3001/api
 ```
 
-If no explicit API base URL is configured, the frontend should use the current hostname and call the backend on port `3001`.
+During local development, Vite proxies `/api` and `/textures` to `https://localhost:3001`, avoiding protocol and certificate mismatches. Outside Vite development, the frontend uses the current hostname and port `3001` unless an explicit API URL is configured.
 
 ## Backend API
 
@@ -380,7 +386,7 @@ This usually means the frontend is calling the backend using HTTPS, but the back
 Make sure the backend is started with:
 
 ```bash
-npm run backend:https:local
+python backend/app.py
 ```
 
 The backend should be available at:
@@ -429,10 +435,9 @@ Add the project license here.
 
 
 
-# Flask backend replacement
+# Python backend
 
-This folder contains a Flask implementation of the original Node/Express backend.
-It preserves the same SQLite schema and HTTP API used by the frontend.
+The Flask backend preserves the SQLite schema and HTTP API used by the frontend.
 
 ## Install
 
@@ -446,7 +451,7 @@ pip install -r requirements.txt
 On Windows PowerShell:
 
 ```powershell
-cd flask_backend
+cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -521,4 +526,3 @@ Temporary uploads are stored in:
 ```text
 backend/storage/<uploadId>/
 ```
-

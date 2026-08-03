@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS experiences (
 
 def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
-    with connect() as conn:
+    with closing(connect()) as conn:
         conn.executescript(SCHEMA_SQL)
         conn.commit()
 
@@ -49,16 +49,16 @@ def connect() -> sqlite3.Connection:
 
 
 def fetch_one(query: str, params: Iterable[Any] = ()) -> sqlite3.Row | None:
-    with connect() as conn:
+    with closing(connect()) as conn:
         return conn.execute(query, tuple(params)).fetchone()
 
 
 def fetch_all(query: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
-    with connect() as conn:
+    with closing(connect()) as conn:
         return conn.execute(query, tuple(params)).fetchall()
 
 
 def execute(query: str, params: Iterable[Any] = ()) -> None:
-    with connect() as conn:
+    with closing(connect()) as conn:
         conn.execute(query, tuple(params))
         conn.commit()
