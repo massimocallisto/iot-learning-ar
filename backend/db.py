@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS experiences (
   teacher_id TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
+  device_id TEXT,
   glb_path TEXT NOT NULL,
   json_path TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -38,6 +39,9 @@ def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
     with closing(connect()) as conn:
         conn.executescript(SCHEMA_SQL)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(experiences)")}
+        if "device_id" not in columns:
+            conn.execute("ALTER TABLE experiences ADD COLUMN device_id TEXT")
         conn.commit()
 
 

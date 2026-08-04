@@ -487,6 +487,7 @@ GET    /api/health
 POST   /api/auth/register
 POST   /api/auth/login
 GET    /api/auth/me
+GET    /api/iot/devices
 GET    /api/experiences
 POST   /api/experiences
 GET    /api/experiences/:id
@@ -508,6 +509,29 @@ GET    /textures/:file
 ```
 
 ## Notes
+
+### ThingsBoard
+
+Il backend autentica il proprio client REST con una API key ThingsBoard. Imposta le
+variabili d'ambiente prima di avviare il backend:
+
+```text
+THINGSBOARD_BASE_URL=https://eu.thingsboard.cloud
+THINGSBOARD_API_KEY=<api-key ThingsBoard>
+THINGSBOARD_TIMEOUT_SECONDS=10
+```
+
+Puoi copiare `backend/.env.example` in `backend/.env`: il backend lo carica
+automaticamente senza sovrascrivere eventuali variabili d'ambiente del sistema.
+In alternativa, puoi impostarle in PowerShell:
+
+```powershell
+$env:THINGSBOARD_API_KEY = "api-key-segreta"
+python backend/app.py
+```
+
+`GET /api/iot/devices` esegue `GET /api/tenant/devices?pageSize=100&page=0` con
+`X-Authorization: ApiKey <THINGSBOARD_API_KEY>` e restituisce per ciascun device solo `id`, `name` e `type`.
 
 The SQLite database is stored in:
 

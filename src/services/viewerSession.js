@@ -4,6 +4,7 @@ class ViewerSession {
   glbFile = undefined;
   jsonFile = undefined;
   id = undefined;
+  deviceId = null;
 
   async setFiles(glb, json) {
     this.glbFile = glb;
@@ -40,10 +41,19 @@ class ViewerSession {
     return this.glbFile;
   }
 
+  setDeviceId(deviceId) {
+    this.deviceId = deviceId || null;
+  }
+
+  getDeviceId() {
+    return this.deviceId;
+  }
+
   clear() {
     this.glbFile = undefined;
     this.jsonFile = undefined;
     this.id = undefined;
+    this.deviceId = null;
   }
 
   async deleteUpload(id) {

@@ -175,7 +175,8 @@ export function ConfigurationPage() {
           title,
           description,
           glbBase64,
-          configJson
+          configJson,
+          deviceId: viewerSession.getDeviceId()
         });
       }
 

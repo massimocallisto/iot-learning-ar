@@ -20,6 +20,7 @@ from flask import Flask, Response, jsonify, request, send_file
 from flask_cors import CORS
 
 from db import execute, fetch_all, fetch_one, init_db
+from thingsboard_service import ThingsBoardError, ThingsBoardService
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = BASE_DIR.parent
@@ -41,6 +42,7 @@ BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
 CORS(app, resources={r"/*": {"origins": CORS_ORIGIN}}, supports_credentials=False)
+thingsboard_service = ThingsBoardService()
 
 
 @app.after_request
@@ -128,7 +130,7 @@ def list_experiences() -> tuple[Response, int] | Response:
 
     rows = fetch_all(
         """
-        SELECT id, title, description, created_at, updated_at
+        SELECT id, title, description, device_id, created_at, updated_at
         FROM experiences
         WHERE teacher_id = ?
         ORDER BY updated_at DESC, created_at DESC
@@ -149,6 +151,7 @@ def create_experience() -> tuple[Response, int] | Response:
     description = normalize_text(body.get("description"))
     glb_base64 = strip_data_url_prefix(body.get("glbBase64"))
     config_json = body.get("configJson")
+    device_id = normalize_text(body.get("deviceId")) or None
 
     if not title:
         return jsonify({"error": "Titolo esperienza obbligatorio"}), 400
@@ -156,6 +159,14 @@ def create_experience() -> tuple[Response, int] | Response:
         return jsonify({"error": "GLB esperienza obbligatorio"}), 400
     if not isinstance(config_json, dict):
         return jsonify({"error": "Configurazione JSON non valida"}), 400
+
+    if device_id:
+        try:
+            available_devices = thingsboard_service.list_devices()
+        except ThingsBoardError as error:
+            return jsonify({"error": str(error)}), 502
+        if not any(device["id"] == device_id for device in available_devices):
+            return jsonify({"error": "Dispositivo ThingsBoard non disponibile"}), 400
 
     try:
         glb_buffer = base64.b64decode(glb_base64, validate=True)
@@ -181,14 +192,15 @@ def create_experience() -> tuple[Response, int] | Response:
     execute(
         """
         INSERT INTO experiences (
-          id, teacher_id, title, description, glb_path, json_path, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          id, teacher_id, title, description, device_id, glb_path, json_path, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             experience_id,
             teacher["id"],
             title,
             description,
+            device_id,
             relative_glb_path,
             relative_json_path,
             timestamp,
@@ -197,10 +209,22 @@ def create_experience() -> tuple[Response, int] | Response:
     )
 
     row = fetch_one(
-        "SELECT id, title, description, created_at, updated_at FROM experiences WHERE id = ?",
+        "SELECT id, title, description, device_id, created_at, updated_at FROM experiences WHERE id = ?",
         (experience_id,),
     )
     return jsonify({"experience": experience_response_from_row(row)}), 201
+
+
+@app.route("/api/iot/devices", methods=["GET"])
+def list_iot_devices() -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+
+    try:
+        return jsonify({"devices": thingsboard_service.list_devices()})
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
 
 
 @app.route("/api/experiences/<experience_id>", methods=["GET"])
@@ -306,7 +330,7 @@ def public_teacher_experiences(code: str) -> tuple[Response, int] | Response:
 
     rows = fetch_all(
         """
-        SELECT id, title, description, created_at, updated_at
+        SELECT id, title, description, device_id, created_at, updated_at
         FROM experiences
         WHERE teacher_id = ?
         ORDER BY updated_at DESC, created_at DESC
@@ -559,6 +583,7 @@ def experience_response_from_row(row: Any) -> dict[str, Any]:
         "id": row["id"],
         "title": row["title"],
         "description": row["description"] or "",
+        "deviceId": row["device_id"],
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
@@ -567,7 +592,7 @@ def experience_response_from_row(row: Any) -> dict[str, Any]:
 def load_teacher_experience_or_null(teacher_id: str, experience_id: str):
     return fetch_one(
         """
-        SELECT id, teacher_id, title, description, glb_path, json_path, created_at, updated_at
+        SELECT id, teacher_id, title, description, device_id, glb_path, json_path, created_at, updated_at
         FROM experiences
         WHERE id = ? AND teacher_id = ?
         """,
@@ -578,7 +603,7 @@ def load_teacher_experience_or_null(teacher_id: str, experience_id: str):
 def load_experience_or_null(experience_id: str):
     return fetch_one(
         """
-        SELECT id, teacher_id, title, description, glb_path, json_path, created_at, updated_at
+        SELECT id, teacher_id, title, description, device_id, glb_path, json_path, created_at, updated_at
         FROM experiences
         WHERE id = ?
         """,

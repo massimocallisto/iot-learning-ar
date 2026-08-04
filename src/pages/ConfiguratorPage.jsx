@@ -15,6 +15,35 @@ export function ConfiguratorPage() {
   const [teacher, setTeacher] = useState(authService.getStoredTeacher());
   const [experiences, setExperiences] = useState([]);
   const [dashboardError, setDashboardError] = useState('');
+  const [connectIotDevice, setConnectIotDevice] = useState(false);
+  const [iotDevices, setIotDevices] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [isDevicesLoading, setIsDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState('');
+
+  async function loadIotDevices() {
+    setIsDevicesLoading(true);
+    setDevicesError('');
+
+    try {
+      setIotDevices(await experienceService.getIotDevices());
+    } catch (err) {
+      setIotDevices([]);
+      setDevicesError(err instanceof Error ? err.message : 'Impossibile caricare i dispositivi IoT.');
+    } finally {
+      setIsDevicesLoading(false);
+    }
+  }
+
+  function changeIotConnection(enabled) {
+    setConnectIotDevice(enabled);
+    if (!enabled) {
+      setSelectedDeviceId('');
+      setDevicesError('');
+      return;
+    }
+    if (!iotDevices.length && !isDevicesLoading) void loadIotDevices();
+  }
 
   async function loadExperiences() {
     setIsExperiencesLoading(true);
@@ -90,6 +119,7 @@ export function ConfiguratorPage() {
     }
 
     try {
+      viewerSession.setDeviceId(connectIotDevice ? selectedDeviceId : null);
       await viewerSession.setFile(glb.files[0]);
       navigate('/configurazione');
     } catch (err) {
@@ -212,6 +242,29 @@ export function ConfiguratorPage() {
                   </div>
                   <div className="form-text">Carica un file .glb</div>
                 </div>
+
+                <fieldset className="mb-4">
+                  <legend className="form-label fw-semibold mb-2">Collega un dispositivo IoT</legend>
+                  <div className="form-check mb-2">
+                    <input className="form-check-input" type="radio" name="iotConnection" id="iotConnectionNo" checked={!connectIotDevice} onChange={() => changeIotConnection(false)} />
+                    <label className="form-check-label" htmlFor="iotConnectionNo">No, usa solo POI descrittivi</label>
+                  </div>
+                  <div className="form-check">
+                    <input className="form-check-input" type="radio" name="iotConnection" id="iotConnectionYes" checked={connectIotDevice} onChange={() => changeIotConnection(true)} />
+                    <label className="form-check-label" htmlFor="iotConnectionYes">Sì, collega un dispositivo IoT esistente</label>
+                  </div>
+
+                  {connectIotDevice && (
+                    <div className="mt-3">
+                      <label className="form-label fw-semibold" htmlFor="iotDevice">Dispositivo ThingsBoard</label>
+                      <select id="iotDevice" className="form-select" value={selectedDeviceId} onChange={(event) => setSelectedDeviceId(event.target.value)} disabled={isDevicesLoading}>
+                        <option value="">{isDevicesLoading ? 'Caricamento dispositivi...' : 'Seleziona un dispositivo'}</option>
+                        {iotDevices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}
+                      </select>
+                      {devicesError && <div className="form-text text-danger">{devicesError}</div>}
+                    </div>
+                  )}
+                </fieldset>
 
                 <button
                   id="generateBtn"

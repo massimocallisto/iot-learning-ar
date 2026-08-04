@@ -2,6 +2,16 @@ import { getApiBase, readError } from './api.js';
 import { authService } from './authService.js';
 
 export const experienceService = {
+  async getIotDevices() {
+    const response = await fetch(`${getApiBase()}/iot/devices`, {
+      headers: authService.authHeaders()
+    });
+
+    if (!response.ok) throw new Error(await readError(response));
+    const data = await response.json();
+    return data.devices || [];
+  },
+
   async getMyExperiences() {
     const response = await fetch(`${getApiBase()}/experiences`, {
       headers: authService.authHeaders()
