@@ -906,6 +906,7 @@ body.ar-mode #threeCanvas{
 .experience-metadata-section textarea {
   resize: vertical;
 }
+
 #setup-container.student-page {
   height: 100vh;
   height: 100dvh;

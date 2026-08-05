@@ -1,15 +1,36 @@
 import { getApiBase, readError } from './api.js';
 import { authService } from './authService.js';
 
+let iotDevicesCache = null;
+let iotDevicesRequest = null;
+
 export const experienceService = {
   async getIotDevices() {
-    const response = await fetch(`${getApiBase()}/iot/devices`, {
+    if (iotDevicesCache) return iotDevicesCache;
+    if (iotDevicesRequest) return iotDevicesRequest;
+
+    iotDevicesRequest = fetch(`${getApiBase()}/iot/devices`, {
+      headers: authService.authHeaders()
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(await readError(response));
+      const data = await response.json();
+      iotDevicesCache = data.devices || [];
+      return iotDevicesCache;
+    }).finally(() => {
+      iotDevicesRequest = null;
+    });
+
+    return iotDevicesRequest;
+  },
+
+  async getIotDeviceLatestTelemetry(deviceId) {
+    const response = await fetch(`${getApiBase()}/iot/devices/${encodeURIComponent(deviceId)}/latest-telemetry`, {
       headers: authService.authHeaders()
     });
 
     if (!response.ok) throw new Error(await readError(response));
     const data = await response.json();
-    return data.devices || [];
+    return data.lastTelemetryTs ?? null;
   },
 
   async getMyExperiences() {

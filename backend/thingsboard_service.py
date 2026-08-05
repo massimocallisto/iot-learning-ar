@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
 from pathlib import Path
@@ -43,6 +44,8 @@ class ThingsBoardService:
         while True:
             query = urlencode({"pageSize": 100, "page": page})
             payload = self._request_json(f"/api/tenant/devices?{query}")
+            if not isinstance(payload, dict):
+                raise ThingsBoardError("Risposta non valida ricevuta da ThingsBoard")
             data = payload.get("data")
             if not isinstance(data, list):
                 raise ThingsBoardError("Risposta non valida ricevuta da ThingsBoard")
@@ -58,7 +61,29 @@ class ThingsBoardService:
                 return devices
             page += 1
 
-    def _request_json(self, path: str) -> dict[str, Any]:
+    def get_latest_telemetry_timestamp(self, device_id: str) -> int | None:
+        telemetry = self._request_json(f"/api/plugins/telemetry/DEVICE/{device_id}/values/timeseries")
+        if not isinstance(telemetry, dict):
+            raise ThingsBoardError("Risposta telemetria non valida ricevuta da ThingsBoard")
+
+        timestamps = [
+            point.get("ts")
+            for values in telemetry.values()
+            if isinstance(values, list)
+            for point in values
+            if isinstance(point, dict) and isinstance(point.get("ts"), int)
+        ]
+        if timestamps:
+            return max(timestamps)
+
+        logging.getLogger(__name__).warning(
+            "[thingsboard] Nessun timestamp telemetria per il device %s. Risposta API: %s",
+            device_id,
+            json.dumps(telemetry, ensure_ascii=False),
+        )
+        return None
+
+    def _request_json(self, path: str) -> Any:
         if not self.api_key:
             raise ThingsBoardError("THINGSBOARD_API_KEY non configurata")
 
@@ -78,6 +103,4 @@ class ThingsBoardService:
         except (URLError, TimeoutError, json.JSONDecodeError) as error:
             raise ThingsBoardError("Impossibile comunicare con ThingsBoard") from error
 
-        if not isinstance(result, dict):
-            raise ThingsBoardError("Risposta non valida ricevuta da ThingsBoard")
         return result

@@ -24,6 +24,14 @@ export function ConfigurationPage() {
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
   const [editingExperienceId, setEditingExperienceId] = useState('');
+  const [selectedDeviceId, setSelectedDeviceId] = useState(viewerSession.getDeviceId() || '');
+  const [iotDevices, setIotDevices] = useState([]);
+  const [isDevicesLoading, setIsDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState('');
+  const [isDevicePickerOpen, setIsDevicePickerOpen] = useState(false);
+  const [lastTelemetryTs, setLastTelemetryTs] = useState(undefined);
+  const [isTelemetryLoading, setIsTelemetryLoading] = useState(false);
+  const [telemetryError, setTelemetryError] = useState('');
 
   useEffect(() => {
     titleRef.current = experienceTitle;
@@ -55,6 +63,7 @@ export function ConfigurationPage() {
           if (cancelled) return;
           setExperienceTitle(experience.title || '');
           setExperienceDescription(experience.description || '');
+          setSelectedDeviceId(experience.deviceId || '');
           titleRef.current = experience.title || '';
           descriptionRef.current = experience.description || '';
           setPayload({ glb: glbResponse, configJson });
@@ -69,6 +78,7 @@ export function ConfigurationPage() {
 
       const uploadId = viewerSession.getId();
       uploadIdRef.current = uploadId;
+      setSelectedDeviceId(viewerSession.getDeviceId() || '');
 
       if (!uploadId) {
         navigate('/');
@@ -99,6 +109,49 @@ export function ConfigurationPage() {
       cancelled = true;
     };
   }, [navigate, routeExperienceId]);
+
+  const loadIotDevices = useCallback(async () => {
+    setIsDevicesLoading(true);
+    setDevicesError('');
+    try {
+      setIotDevices(await experienceService.getIotDevices());
+    } catch (err) {
+      setDevicesError(err instanceof Error ? err.message : 'Impossibile caricare i dispositivi IoT.');
+    } finally {
+      setIsDevicesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDeviceId) {
+      setLastTelemetryTs(undefined);
+      setTelemetryError('');
+      return;
+    }
+
+    let cancelled = false;
+    void loadIotDevices();
+    setIsTelemetryLoading(true);
+    setTelemetryError('');
+    void experienceService.getIotDeviceLatestTelemetry(selectedDeviceId)
+      .then((timestamp) => {
+        if (!cancelled) setLastTelemetryTs(timestamp);
+      })
+      .catch((err) => {
+        if (!cancelled) setTelemetryError(err instanceof Error ? err.message : 'Impossibile caricare la telemetria.');
+      })
+      .finally(() => {
+        if (!cancelled) setIsTelemetryLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [loadIotDevices, selectedDeviceId]);
+
+  function changeDevice(deviceId) {
+    setSelectedDeviceId(deviceId);
+    viewerSession.setDeviceId(deviceId || null);
+    setIsDevicePickerOpen(false);
+  }
 
   useEffect(() => {
     if (!payload || !canvasRef.current || !hostRef.current || viewerRef.current) return;
@@ -167,7 +220,8 @@ export function ConfigurationPage() {
         await experienceService.updateExperience(editingExperienceId, {
           title,
           description,
-          configJson
+          configJson,
+          deviceId: selectedDeviceId || null
         });
       } else {
         const glbBase64 = await viewerSession.fileToBase64(glbFile);
@@ -176,7 +230,7 @@ export function ConfigurationPage() {
           description,
           glbBase64,
           configJson,
-          deviceId: viewerSession.getDeviceId()
+          deviceId: selectedDeviceId || null
         });
       }
 
@@ -195,7 +249,7 @@ export function ConfigurationPage() {
       savingRef.current = false;
       setIsSavingExperience(false);
     }
-  }, [editingExperienceId, navigate]);
+  }, [editingExperienceId, navigate, selectedDeviceId]);
 
   useEffect(() => {
     const onExperienceSave = (event) => {
@@ -261,6 +315,31 @@ export function ConfigurationPage() {
             {saveError && <div className="alert alert-danger mt-3 mb-0" role="alert">{saveError}</div>}
           </section>
 
+          <section className="ctrl-section" aria-live="polite">
+            <div className="ctrl-title">Device IoT collegato</div>
+
+            {selectedDeviceId ? (
+              <>
+                <div className="fw-semibold">{iotDevices.find((device) => device.id === selectedDeviceId)?.name || 'Caricamento device...'}</div>
+                <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                  <span className={`form-text mt-0 ${telemetryError ? 'text-danger' : ''}`}>
+                    {isTelemetryLoading ? 'Caricamento ultima telemetria...' : telemetryError || (lastTelemetryTs ? `Ultima telemetria: ${new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(lastTelemetryTs))}` : 'Nessuna telemetria disponibile')}
+                  </span>
+                  <button type="button" className="btn btn-sm btn-primary ms-auto" onClick={() => { setIsDevicePickerOpen(true); void loadIotDevices(); }}>
+                    Cambia device
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                <span className="form-text mt-0">Nessun device collegato</span>
+                <button type="button" className="btn btn-sm btn-primary ms-auto" onClick={() => { setIsDevicePickerOpen(true); void loadIotDevices(); }}>
+                  Collega device
+                </button>
+              </div>
+            )}
+          </section>
+
           <div id="imperative-control-root" />
         </div>
       </aside>
@@ -268,6 +347,34 @@ export function ConfigurationPage() {
       <main ref={hostRef} id="viewerHost" className="viewer">
         <canvas ref={canvasRef} id="threeCanvas" />
       </main>
+
+      {isDevicePickerOpen && (
+        <>
+          <div className="modal fade show d-block" role="dialog" aria-modal="true" aria-labelledby="devicePickerTitle">
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h2 className="modal-title fs-5" id="devicePickerTitle">Seleziona device IoT</h2>
+                  <button type="button" className="btn-close" aria-label="Chiudi" onClick={() => setIsDevicePickerOpen(false)} />
+                </div>
+                <div className="modal-body">
+                  {isDevicesLoading ? <p className="mb-0 text-muted">Caricamento dispositivi...</p> : devicesError ? <p className="mb-0 text-danger">{devicesError}</p> : (
+                    <div className="list-group">
+                      <button type="button" className="list-group-item list-group-item-action" onClick={() => changeDevice('')}>Nessun device collegato</button>
+                      {iotDevices.map((device) => (
+                        <button type="button" className={`list-group-item list-group-item-action${device.id === selectedDeviceId ? ' active' : ''}`} key={device.id} onClick={() => changeDevice(device.id)}>
+                          {device.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop fade show" onClick={() => setIsDevicePickerOpen(false)} />
+        </>
+      )}
     </div>
   );
 }

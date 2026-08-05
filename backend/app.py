@@ -227,6 +227,19 @@ def list_iot_devices() -> tuple[Response, int] | Response:
         return jsonify({"error": str(error)}), 502
 
 
+@app.route("/api/iot/devices/<device_id>/latest-telemetry", methods=["GET"])
+def get_iot_device_latest_telemetry(device_id: str) -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+
+    try:
+        timestamp = thingsboard_service.get_latest_telemetry_timestamp(device_id)
+        return jsonify({"lastTelemetryTs": timestamp})
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+
+
 @app.route("/api/experiences/<experience_id>", methods=["GET"])
 def get_experience(experience_id: str) -> tuple[Response, int] | Response:
     teacher = require_auth_or_response()
@@ -277,11 +290,20 @@ def update_experience(experience_id: str) -> tuple[Response, int] | Response:
     title = normalize_text(body.get("title"))
     description = normalize_text(body.get("description"))
     config_json = body.get("configJson")
+    device_id = normalize_text(body.get("deviceId")) or None
 
     if not title:
         return jsonify({"error": "Titolo esperienza obbligatorio"}), 400
     if not isinstance(config_json, dict):
         return jsonify({"error": "Configurazione JSON non valida"}), 400
+
+    if "deviceId" in body and device_id:
+        try:
+            available_devices = thingsboard_service.list_devices()
+        except ThingsBoardError as error:
+            return jsonify({"error": str(error)}), 502
+        if not any(device["id"] == device_id for device in available_devices):
+            return jsonify({"error": "Dispositivo ThingsBoard non disponibile"}), 400
 
     (BASE_DIR / row["json_path"]).write_text(
         json.dumps(config_json, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -290,10 +312,10 @@ def update_experience(experience_id: str) -> tuple[Response, int] | Response:
     execute(
         """
         UPDATE experiences
-        SET title = ?, description = ?, updated_at = ?
+        SET title = ?, description = ?, device_id = ?, updated_at = ?
         WHERE id = ? AND teacher_id = ?
         """,
-        (title, description, updated_at, experience_id, teacher["id"]),
+        (title, description, device_id if "deviceId" in body else row["device_id"], updated_at, experience_id, teacher["id"]),
     )
 
     updated = load_teacher_experience_or_null(teacher["id"], experience_id)
