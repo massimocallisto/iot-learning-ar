@@ -105,7 +105,11 @@ export function ViewerPage() {
 
         viewerRef.current = viewer;
         await uploadViewe(payload.glb, viewer, payload.json);
-        await load(viewer);
+        const deviceId = viewerSession.getDeviceId();
+        const telemetryProvider = payload.isPublic
+          ? () => experienceService.getPublicExperienceTelemetry(publicExperienceId)
+          : (deviceId ? () => experienceService.getIotDeviceTelemetry(deviceId) : null);
+        await load(viewer, { telemetryProvider });
 
         if (!payload.isPublic && uploadIdRef.current) {
           await viewerSession.deleteUpload(uploadIdRef.current);

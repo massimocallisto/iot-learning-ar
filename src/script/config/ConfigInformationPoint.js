@@ -19,8 +19,18 @@ export class ConfigInformationPoint{
         this.infoPointNameTemp = "";
         this.infoPointTemp = new Set();
         this.infoPointDescriptionTemp = "";
+        this.selectedTelemetryTemp = "";
         this.editingIndex = -1;
         this.ready = false;
+
+        this.telemetryKeys = [];
+        this.telemetryValues = {};
+        this.telemetryState = { deviceConnected: false, loading: false, error: "" };
+        this.telemetrySelectEl = null;
+        this.telemetryHintEl = null;
+        this.descriptionEditor = null;
+        this.onTelemetryCatalog = this.onTelemetryCatalog.bind(this);
+        window.addEventListener("experience:telemetry-catalog", this.onTelemetryCatalog);
 
         this.section = document.createElement("section");
         this.descriptionInfoPointEl = null;
@@ -86,6 +96,7 @@ export class ConfigInformationPoint{
 
     dispose() {
         this.el.removeEventListener("pointerdown", this.onPointerDown);
+        window.removeEventListener("experience:telemetry-catalog", this.onTelemetryCatalog);
     }
 
 
@@ -162,6 +173,7 @@ export class ConfigInformationPoint{
             this.ready = true;
             this.infoPointTemp.clear();
             this.infoPointDescriptionTemp = "";
+            this.selectedTelemetryTemp = "";
             list.replaceChildren();
             this.showDescriptionInfoPoint();
         });
@@ -175,7 +187,8 @@ export class ConfigInformationPoint{
             const infoPoint = {
                 name: this.infoPointNameTemp,
                 parte: Array.from(this.infoPointTemp),
-                descrizione: this.infoPointDescriptionTemp
+                descrizione: this.infoPointDescriptionTemp,
+                telemetria: this.selectedTelemetryTemp || null
             };
 
             if(this.editingIndex >= 0){
@@ -232,6 +245,7 @@ export class ConfigInformationPoint{
     resetDraft(){
         this.infoPointTemp.clear();
         this.infoPointDescriptionTemp = "";
+        this.selectedTelemetryTemp = "";
         this.infoPointNameTemp = "";
         this.editingIndex = -1;
         this.ready = false;
@@ -256,6 +270,7 @@ export class ConfigInformationPoint{
         this.ready = true;
         this.infoPointNameTemp = infoPoint.name;
         this.infoPointDescriptionTemp = infoPoint.descrizione || "";
+        this.selectedTelemetryTemp = infoPoint.telemetria || "";
         this.infoPointTemp = new Set(infoPoint.parte || []);
 
         if(this.nameInputEl) this.nameInputEl.value = this.infoPointNameTemp;
@@ -297,7 +312,8 @@ export class ConfigInformationPoint{
                 parte: Array.isArray(infoPoint.parte)
                     ? infoPoint.parte
                     : (infoPoint.parte ? [infoPoint.parte] : []),
-                descrizione: infoPoint.descrizione || ""
+                descrizione: infoPoint.descrizione || "",
+                telemetria: infoPoint.telemetria || ""
             }));
 
         this.report();
@@ -409,23 +425,110 @@ export class ConfigInformationPoint{
         });
     }
 
+    onTelemetryCatalog(event){
+        const detail = event.detail || {};
+        this.telemetryKeys = Array.isArray(detail.keys)
+            ? [...new Set(detail.keys.filter((key) => typeof key === "string" && key.trim()))]
+                .sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" }))
+            : [];
+        this.telemetryState = {
+            deviceConnected: Boolean(detail.deviceConnected),
+            loading: Boolean(detail.loading),
+            error: detail.error || ""
+        };
+        this.telemetryValues = detail.values || {};
+        this.updateTelemetrySelector();
+        this.descriptionEditor?.setTelemetryKeys(this.telemetryKeys);
+        this.descriptionEditor?.setTelemetryValues(this.telemetryValues);
+    }
+
+    updateTelemetrySelector(){
+        if(!this.telemetrySelectEl || !this.telemetryHintEl) return;
+
+        const selected = this.selectedTelemetryTemp;
+        this.telemetrySelectEl.replaceChildren();
+
+        const emptyOption = document.createElement("option");
+        emptyOption.value = "";
+        if(this.telemetryState.loading){
+            emptyOption.textContent = "Caricamento telemetrie...";
+        }else if(!this.telemetryState.deviceConnected){
+            emptyOption.textContent = "Nessun device collegato";
+        }else if(!this.telemetryKeys.length){
+            emptyOption.textContent = "Nessuna telemetria disponibile";
+        }else{
+            emptyOption.textContent = "Seleziona una telemetria";
+        }
+        this.telemetrySelectEl.appendChild(emptyOption);
+
+        if(selected && !this.telemetryKeys.includes(selected)){
+            const unavailable = document.createElement("option");
+            unavailable.value = selected;
+            unavailable.textContent = `${selected} (non disponibile)`;
+            this.telemetrySelectEl.appendChild(unavailable);
+        }
+
+        for(const key of this.telemetryKeys){
+            const option = document.createElement("option");
+            option.value = key;
+            option.textContent = key;
+            this.telemetrySelectEl.appendChild(option);
+        }
+
+        this.telemetrySelectEl.value = selected;
+        this.telemetrySelectEl.disabled = this.telemetryState.loading || !this.telemetryKeys.length;
+        this.telemetryHintEl.textContent = this.telemetryState.error
+            || (this.telemetryState.deviceConnected
+                ? "Scegli una telemetria dal catalogo del device."
+                : "Collega un device IoT per visualizzare il catalogo delle telemetrie.");
+        this.telemetryHintEl.className = `form-text d-block${this.telemetryState.error ? " text-danger" : ""}`;
+    }
+
     createDescrtionInfoPoint(initialValue = ""){
         const wrapper = document.createElement("div");
         wrapper.className = "mt-2";
 
         const feedback = document.createElement("small");
         feedback.className = "text-success d-block mt-1";
+
+        const catalogWrapper = document.createElement("div");
+        catalogWrapper.className = "telemetry-catalog mb-3";
+
+        const catalogLabel = document.createElement("label");
+        catalogLabel.className = "form-label fw-semibold";
+        catalogLabel.setAttribute("for", "telemetriaInfoPoint");
+        catalogLabel.textContent = "Telemetria selezionata";
+
+        const telemetrySelect = document.createElement("select");
+        telemetrySelect.id = "telemetriaInfoPoint";
+        telemetrySelect.className = "form-select w-100";
+        telemetrySelect.style.maxWidth = "none";
+        this.telemetrySelectEl = telemetrySelect;
+
+        const telemetryHint = document.createElement("small");
+        this.telemetryHintEl = telemetryHint;
+
+        telemetrySelect.addEventListener("change", () => {
+            this.selectedTelemetryTemp = telemetrySelect.value;
+        });
+        catalogWrapper.append(catalogLabel, telemetrySelect, telemetryHint);
+        this.updateTelemetrySelector();
         
         const editor = createMarkdownEditor({
             id: "descrizioneInfoPoint",
             labelText: "Descrizione",
             placeholder: "Scrivi qui la descrizione...",
             initialValue,
+            highlightTelemetryPlaceholders: true,
+            telemetryKeys: this.telemetryKeys,
+            telemetryValues: this.telemetryValues,
+            helperText: "Usa {{nome_telemetria}}: il placeholder diventa blu quando è presente nel catalogo.",
             onInput: (value) => {
                 this.infoPointDescriptionTemp = value;
                 feedback.textContent = "";
             }
         });
+        this.descriptionEditor = editor;
 
         // bottone finale
         const confirm = document.createElement("button");
@@ -437,7 +540,7 @@ export class ConfigInformationPoint{
             feedback.textContent = "Descrizione information point salvata";
         })
         
-        wrapper.append(editor.wrapper, confirm, feedback);
+        wrapper.append(catalogWrapper, editor.wrapper, confirm, feedback);
         return wrapper;
     }
 
@@ -455,6 +558,9 @@ export class ConfigInformationPoint{
         if(!this.descriptionInfoPointEl) return;
         this.descriptionInfoPointEl.remove();
         this.descriptionInfoPointEl = null;
+        this.telemetrySelectEl = null;
+        this.telemetryHintEl = null;
+        this.descriptionEditor = null;
 
     }
 

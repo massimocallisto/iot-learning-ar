@@ -6,7 +6,7 @@ import os
 from typing import Any
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 
@@ -62,7 +62,9 @@ class ThingsBoardService:
             page += 1
 
     def get_latest_telemetry_timestamp(self, device_id: str) -> int | None:
-        telemetry = self._request_json(f"/api/plugins/telemetry/DEVICE/{device_id}/values/timeseries")
+        telemetry = self._request_json(
+            f"/api/plugins/telemetry/DEVICE/{quote(device_id, safe='')}/values/timeseries"
+        )
         if not isinstance(telemetry, dict):
             raise ThingsBoardError("Risposta telemetria non valida ricevuta da ThingsBoard")
 
@@ -82,6 +84,54 @@ class ThingsBoardService:
             json.dumps(telemetry, ensure_ascii=False),
         )
         return None
+
+    def get_telemetry_catalog(self, device_id: str) -> list[str]:
+        keys = self._request_json(
+            f"/api/plugins/telemetry/DEVICE/{quote(device_id, safe='')}/keys/timeseries"
+        )
+        if not isinstance(keys, list):
+            raise ThingsBoardError("Catalogo telemetrie non valido ricevuto da ThingsBoard")
+
+        return sorted({key for key in keys if isinstance(key, str) and key.strip()}, key=str.casefold)
+
+    def get_latest_telemetry(self, device_id: str) -> dict[str, dict[str, Any]]:
+        telemetry = self._request_json(
+            f"/api/plugins/telemetry/DEVICE/{quote(device_id, safe='')}/values/timeseries"
+        )
+        if not isinstance(telemetry, dict):
+            raise ThingsBoardError("Risposta telemetria non valida ricevuta da ThingsBoard")
+
+        result: dict[str, dict[str, Any]] = {}
+        for key, points in telemetry.items():
+            if not isinstance(key, str) or not isinstance(points, list) or not points:
+                continue
+            point = points[0]
+            if not isinstance(point, dict) or "value" not in point:
+                continue
+            result[key] = {
+                "value": point["value"],
+                "ts": point.get("ts") if isinstance(point.get("ts"), int) else None,
+            }
+
+        return result
+
+    def get_device_active_status(self, device_id: str) -> bool:
+        attributes = self._request_json(
+            f"/api/plugins/telemetry/DEVICE/{quote(device_id, safe='')}/values/attributes/SERVER_SCOPE?keys=active"
+        )
+        if not isinstance(attributes, list):
+            raise ThingsBoardError("Stato device non valido ricevuto da ThingsBoard")
+
+        for attribute in attributes:
+            if not isinstance(attribute, dict) or attribute.get("key") != "active":
+                continue
+            value = attribute.get("value")
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str) and value.lower() in {"true", "false"}:
+                return value.lower() == "true"
+
+        return False
 
     def _request_json(self, path: str) -> Any:
         if not self.api_key:

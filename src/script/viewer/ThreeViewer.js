@@ -61,6 +61,10 @@ export class ThreeViewer {
     resize() { return this.core.resize(); }
 
     dispose() {
+        this._configurationRuntime?.dispose?.();
+        this._configurationRuntime = null;
+        this._infoPointRuntime?.dispose?.();
+        this._infoPointRuntime = null;
         this.env.dispose();
         this.gestures.dispose();
         this.core.dispose();

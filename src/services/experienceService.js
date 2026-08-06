@@ -33,6 +33,36 @@ export const experienceService = {
     return data.lastTelemetryTs ?? null;
   },
 
+  async getIotDeviceTelemetryCatalog(deviceId) {
+    const response = await fetch(`${getApiBase()}/iot/devices/${encodeURIComponent(deviceId)}/telemetry-catalog`, {
+      headers: authService.authHeaders()
+    });
+
+    if (!response.ok) throw new Error(await readError(response));
+    const data = await response.json();
+    return data.telemetryKeys || [];
+  },
+
+  async getIotDeviceTelemetry(deviceId) {
+    const response = await fetch(`${getApiBase()}/iot/devices/${encodeURIComponent(deviceId)}/telemetry`, {
+      headers: authService.authHeaders()
+    });
+
+    if (!response.ok) throw new Error(await readError(response));
+    const data = await response.json();
+    return data.telemetry || {};
+  },
+
+  async getIotDeviceStatus(deviceId) {
+    const response = await fetch(`${getApiBase()}/iot/devices/${encodeURIComponent(deviceId)}/status`, {
+      headers: authService.authHeaders()
+    });
+
+    if (!response.ok) throw new Error(await readError(response));
+    const data = await response.json();
+    return data.active === true;
+  },
+
   async getMyExperiences() {
     const response = await fetch(`${getApiBase()}/experiences`, {
       headers: authService.authHeaders()
@@ -129,5 +159,13 @@ export const experienceService = {
 
     if (!response.ok) throw new Error(await readError(response));
     return response;
+  },
+
+  async getPublicExperienceTelemetry(id) {
+    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/telemetry`);
+
+    if (!response.ok) throw new Error(await readError(response));
+    const data = await response.json();
+    return data.telemetry || {};
   }
 };

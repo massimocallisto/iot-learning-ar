@@ -22,9 +22,9 @@ export async function uploadViewe(glb, viewer, json)
 }
 
 
-export async function load(viewer) {
+export async function load(viewer, options = {}) {
     // Costruzione UI varianti in base alle regole del JSON caricato.
-    await loadVariant(viewer);    
+    await loadVariant(viewer, options);
 }
 
 
@@ -39,7 +39,9 @@ export async function uploadConfigurazione(glb, viewer, configJson = null) {
     if(!url) return;
     await viewer.loadGLB(url);
     //viewer.mode="configuratore";
+    viewer._configurationRuntime?.dispose?.();
     const createConf = new createConfigurationSet(viewer);
+    viewer._configurationRuntime = createConf;
 
     createConf.start(configJson);
 

@@ -65,8 +65,11 @@ export class createConfigurationSet {
         this.root.appendChild(esporta);
     }
 
+    dispose() {
+        this.infoPoint.dispose();
+    }
+
     
 
 }
-
 

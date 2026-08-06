@@ -6,16 +6,16 @@ const MIN_MARKER_RADIUS = 0.01;
 const MAX_MARKER_RADIUS = 0.03;
 const FALLBACK_MARKER_RADIUS = 0.018;
 
-export function createInfoPoint(viewer, infoPoint) {
+export function createInfoPoint(viewer, infoPoint, options = {}) {
   if (viewer._infoPointRuntime) {
     viewer._infoPointRuntime.dispose();
   }
 
-  viewer._infoPointRuntime = new InfoPointRuntime(viewer, infoPoint);
+  viewer._infoPointRuntime = new InfoPointRuntime(viewer, infoPoint, options);
 }
 
 class InfoPointRuntime {
-  constructor(viewer, infoPoints = []) {
+  constructor(viewer, infoPoints = [], options = {}) {
     this.viewer = viewer;
     this.core = viewer.core;
     this.camera = this.core.camera;
@@ -28,6 +28,13 @@ class InfoPointRuntime {
 
     this.infoPoints = Array.isArray(infoPoints) ? infoPoints : [infoPoints].filter(Boolean);
     this.markers = [];
+    this.telemetryProvider = typeof options.telemetryProvider === "function"
+      ? options.telemetryProvider
+      : null;
+    this.telemetryValues = {};
+    this.telemetryTimer = null;
+    this.telemetryRequestPending = false;
+    this.currentInfoPoint = null;
 
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -423,16 +430,15 @@ class InfoPointRuntime {
 
   showPanel(info) {
     const parts = normalizeParts(info.parte);
+    this.currentInfoPoint = info;
 
     this.panel.querySelector(".info-point-panel-title").textContent =
       info.name || parts[0] || "Information point";
 
-    renderMarkdownToElement(
-      this.panel.querySelector(".info-point-panel-description"),
-      info.descrizione || ""
-    );
+    this.renderInfoPointDescription();
 
     this.panel.style.display = "block";
+    this.startTelemetryUpdates();
 
     if (this.viewer.xr.isPresenting) {
       document.querySelector("#control")?.classList.add("open");
@@ -441,7 +447,50 @@ class InfoPointRuntime {
 
   hidePanel() {
     this.panel.style.display = "none";
+    this.currentInfoPoint = null;
+    this.stopTelemetryUpdates();
     document.querySelector("#control")?.classList.remove("open");
+  }
+
+  renderInfoPointDescription() {
+    if (!this.currentInfoPoint) return;
+    const description = replaceTelemetryPlaceholders(
+      this.currentInfoPoint.descrizione || "",
+      this.telemetryValues
+    );
+    renderMarkdownToElement(
+      this.panel.querySelector(".info-point-panel-description"),
+      description
+    );
+  }
+
+  startTelemetryUpdates() {
+    this.stopTelemetryUpdates();
+    if (!this.telemetryProvider) return;
+    void this.refreshTelemetry();
+    this.telemetryTimer = window.setInterval(() => {
+      void this.refreshTelemetry();
+    }, 3000);
+  }
+
+  stopTelemetryUpdates() {
+    if (this.telemetryTimer !== null) {
+      window.clearInterval(this.telemetryTimer);
+      this.telemetryTimer = null;
+    }
+  }
+
+  async refreshTelemetry() {
+    if (!this.telemetryProvider || this.telemetryRequestPending) return;
+    this.telemetryRequestPending = true;
+    try {
+      this.telemetryValues = await this.telemetryProvider();
+      this.renderInfoPointDescription();
+    } catch (error) {
+      console.warn("Aggiornamento telemetria information point non riuscito:", error);
+    } finally {
+      this.telemetryRequestPending = false;
+    }
   }
 
   suppressSelection(durationMs = 350) {
@@ -453,6 +502,7 @@ class InfoPointRuntime {
   }
 
   dispose() {
+    this.stopTelemetryUpdates();
     this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown);
 
     const overlay = document.querySelector("#ar-overlay");
@@ -473,6 +523,14 @@ class InfoPointRuntime {
 function normalizeParts(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function replaceTelemetryPlaceholders(description, telemetry) {
+  return String(description).replace(/{{\s*([A-Za-z0-9_.:-]+)\s*}}/g, (placeholder, key) => {
+    const point = telemetry?.[key];
+    if (!point || point.value === undefined || point.value === null) return placeholder;
+    return String(point.value);
+  });
 }
 
 function getProjectionCamera(camera) {

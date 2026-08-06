@@ -4,7 +4,7 @@ import { createFinalInfo } from "../ui/createFinalInfo.js";
 import { createInizialInfo } from "../ui/createInizialInfo.js";
 import { createInfoPoint } from "../ui/createInfoPoint.js";
 
-export async function loadVariant(viewer){
+export async function loadVariant(viewer, options = {}){
     // Interpreta le regole in ordine e costruisce UI/comportamenti runtime.
     const varianti = await jsonStore.getRegole();
     for (const variante of varianti) {
@@ -19,7 +19,7 @@ export async function loadVariant(viewer){
             break;
 
             case "informationPoint":
-                 createInfoPoint(viewer, variante.infoPoint);
+                 createInfoPoint(viewer, variante.infoPoint, options);
             break;
 
             case "ar":

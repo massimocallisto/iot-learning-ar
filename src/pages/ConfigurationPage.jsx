@@ -16,6 +16,8 @@ export function ConfigurationPage() {
   const titleRef = useRef('');
   const descriptionRef = useRef('');
   const savingRef = useRef(false);
+  const telemetryCatalogRef = useRef([]);
+  const telemetryValuesRef = useRef({});
 
   const [payload, setPayload] = useState(null);
   const [experienceTitle, setExperienceTitle] = useState('');
@@ -32,6 +34,7 @@ export function ConfigurationPage() {
   const [lastTelemetryTs, setLastTelemetryTs] = useState(undefined);
   const [isTelemetryLoading, setIsTelemetryLoading] = useState(false);
   const [telemetryError, setTelemetryError] = useState('');
+  const [isDeviceActive, setIsDeviceActive] = useState(false);
 
   useEffect(() => {
     titleRef.current = experienceTitle;
@@ -126,6 +129,12 @@ export function ConfigurationPage() {
     if (!selectedDeviceId) {
       setLastTelemetryTs(undefined);
       setTelemetryError('');
+      telemetryCatalogRef.current = [];
+      telemetryValuesRef.current = {};
+      setIsDeviceActive(false);
+      window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
+        detail: { keys: [], values: {}, deviceConnected: false, loading: false }
+      }));
       return;
     }
 
@@ -133,12 +142,40 @@ export function ConfigurationPage() {
     void loadIotDevices();
     setIsTelemetryLoading(true);
     setTelemetryError('');
-    void experienceService.getIotDeviceLatestTelemetry(selectedDeviceId)
-      .then((timestamp) => {
-        if (!cancelled) setLastTelemetryTs(timestamp);
+    telemetryCatalogRef.current = [];
+    telemetryValuesRef.current = {};
+    setIsDeviceActive(false);
+    window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
+      detail: { keys: [], values: {}, deviceConnected: true, loading: true }
+    }));
+    void Promise.all([
+      experienceService.getIotDeviceLatestTelemetry(selectedDeviceId),
+      experienceService.getIotDeviceTelemetryCatalog(selectedDeviceId),
+      experienceService.getIotDeviceTelemetry(selectedDeviceId),
+      experienceService.getIotDeviceStatus(selectedDeviceId).catch(() => false)
+    ])
+      .then(([timestamp, keys, values, active]) => {
+        if (!cancelled) {
+          setLastTelemetryTs(timestamp);
+          telemetryCatalogRef.current = keys;
+          telemetryValuesRef.current = values;
+          setIsDeviceActive(active);
+          window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
+            detail: { keys, values, deviceConnected: true, loading: false }
+          }));
+        }
       })
       .catch((err) => {
-        if (!cancelled) setTelemetryError(err instanceof Error ? err.message : 'Impossibile caricare la telemetria.');
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Impossibile caricare la telemetria.';
+          setTelemetryError(message);
+          telemetryCatalogRef.current = [];
+          telemetryValuesRef.current = {};
+          setIsDeviceActive(false);
+          window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
+            detail: { keys: [], values: {}, deviceConnected: true, loading: false, error: message }
+          }));
+        }
       })
       .finally(() => {
         if (!cancelled) setIsTelemetryLoading(false);
@@ -167,6 +204,14 @@ export function ConfigurationPage() {
 
         viewerRef.current = viewer;
         await uploadConfigurazione(payload.glb, viewer, payload.configJson);
+        window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
+          detail: {
+            keys: telemetryCatalogRef.current,
+            values: telemetryValuesRef.current,
+            deviceConnected: Boolean(selectedDeviceId),
+            loading: false
+          }
+        }));
 
         if (disposed) {
           viewer.dispose();
@@ -316,7 +361,14 @@ export function ConfigurationPage() {
           </section>
 
           <section className="ctrl-section" aria-live="polite">
-            <div className="ctrl-title">Device IoT collegato</div>
+            <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <div className="ctrl-title mb-0">Device IoT collegato</div>
+              {selectedDeviceId && (
+                <span className={`badge ${isDeviceActive ? 'bg-success' : 'bg-danger'}`}>
+                  {isDeviceActive ? 'Attivo' : 'Inattivo'}
+                </span>
+              )}
+            </div>
 
             {selectedDeviceId ? (
               <>

@@ -240,6 +240,42 @@ def get_iot_device_latest_telemetry(device_id: str) -> tuple[Response, int] | Re
         return jsonify({"error": str(error)}), 502
 
 
+@app.route("/api/iot/devices/<device_id>/telemetry-catalog", methods=["GET"])
+def get_iot_device_telemetry_catalog(device_id: str) -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+
+    try:
+        return jsonify({"telemetryKeys": thingsboard_service.get_telemetry_catalog(device_id)})
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+
+
+@app.route("/api/iot/devices/<device_id>/telemetry", methods=["GET"])
+def get_iot_device_telemetry(device_id: str) -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+
+    try:
+        return jsonify({"telemetry": thingsboard_service.get_latest_telemetry(device_id)})
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+
+
+@app.route("/api/iot/devices/<device_id>/status", methods=["GET"])
+def get_iot_device_status(device_id: str) -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+
+    try:
+        return jsonify({"active": thingsboard_service.get_device_active_status(device_id)})
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+
+
 @app.route("/api/experiences/<experience_id>", methods=["GET"])
 def get_experience(experience_id: str) -> tuple[Response, int] | Response:
     teacher = require_auth_or_response()
@@ -381,6 +417,20 @@ def public_experience_json(experience_id: str) -> tuple[Response, int] | Respons
     if not row:
         return jsonify({"error": "Esperienza non trovata"}), 404
     return stream_file(BASE_DIR / row["json_path"], "application/json", "config.json")
+
+
+@app.route("/api/public/experiences/<experience_id>/telemetry", methods=["GET"])
+def public_experience_telemetry(experience_id: str) -> tuple[Response, int] | Response:
+    row = load_experience_or_null(experience_id)
+    if not row:
+        return jsonify({"error": "Esperienza non trovata"}), 404
+    if not row["device_id"]:
+        return jsonify({"telemetry": {}})
+
+    try:
+        return jsonify({"telemetry": thingsboard_service.get_latest_telemetry(row["device_id"])})
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
 
 
 @app.route("/api/uploads", methods=["POST"])
