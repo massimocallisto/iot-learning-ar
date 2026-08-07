@@ -20,6 +20,7 @@ export function ConfiguratorPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [isDevicesLoading, setIsDevicesLoading] = useState(false);
   const [devicesError, setDevicesError] = useState('');
+  const [iotSelectionError, setIotSelectionError] = useState('');
 
   async function loadIotDevices() {
     setIsDevicesLoading(true);
@@ -37,6 +38,7 @@ export function ConfiguratorPage() {
 
   function changeIotConnection(enabled) {
     setConnectIotDevice(enabled);
+    setIotSelectionError('');
     if (!enabled) {
       setSelectedDeviceId('');
       setDevicesError('');
@@ -109,6 +111,11 @@ export function ConfiguratorPage() {
   }
 
   async function upload() {
+    if (connectIotDevice && !selectedDeviceId) {
+      setIotSelectionError('Seleziona un dispositivo IoT prima di creare l’esperienza.');
+      return;
+    }
+
     setIsLoading(true);
     const glb = glbInputRef.current;
 
@@ -257,11 +264,12 @@ export function ConfiguratorPage() {
                   {connectIotDevice && (
                     <div className="mt-3">
                       <label className="form-label fw-semibold" htmlFor="iotDevice">Dispositivo ThingsBoard</label>
-                      <select id="iotDevice" className="form-select" value={selectedDeviceId} onChange={(event) => setSelectedDeviceId(event.target.value)} disabled={isDevicesLoading}>
-                        <option value="">{isDevicesLoading ? 'Caricamento dispositivi...' : 'Seleziona un dispositivo'}</option>
+                      <select id="iotDevice" className="form-select" value={selectedDeviceId} onChange={(event) => { setSelectedDeviceId(event.target.value); setIotSelectionError(''); }} disabled={isDevicesLoading}>
+                        <option value="" disabled hidden>{isDevicesLoading ? 'Caricamento dispositivi...' : 'Seleziona un dispositivo'}</option>
                         {iotDevices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}
                       </select>
                       {devicesError && <div className="form-text text-danger">{devicesError}</div>}
+                      {iotSelectionError && <div className="form-text text-danger" role="alert">{iotSelectionError}</div>}
                     </div>
                   )}
                 </fieldset>

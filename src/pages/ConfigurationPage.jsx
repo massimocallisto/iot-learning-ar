@@ -412,7 +412,9 @@ export function ConfigurationPage() {
                 <div className="modal-body">
                   {isDevicesLoading ? <p className="mb-0 text-muted">Caricamento dispositivi...</p> : devicesError ? <p className="mb-0 text-danger">{devicesError}</p> : (
                     <div className="list-group">
-                      <button type="button" className="list-group-item list-group-item-action" onClick={() => changeDevice('')}>Nessun device collegato</button>
+                      {selectedDeviceId && (
+                        <button type="button" className="list-group-item list-group-item-action" onClick={() => changeDevice('')}>Disconnetti device</button>
+                      )}
                       {iotDevices.map((device) => (
                         <button type="button" className={`list-group-item list-group-item-action${device.id === selectedDeviceId ? ' active' : ''}`} key={device.id} onClick={() => changeDevice(device.id)}>
                           {device.name}
