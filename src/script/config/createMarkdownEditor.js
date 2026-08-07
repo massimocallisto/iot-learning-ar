@@ -15,7 +15,7 @@ export function createMarkdownEditor({
   const wrapper = document.createElement("div");
 
   const label = document.createElement("label");
-  label.className = "form-label";
+  label.className = "form-label fw-semibold";
   label.setAttribute("for", id);
   label.textContent = labelText;
 
@@ -122,6 +122,7 @@ export function createMarkdownEditor({
 
   return {
     wrapper,
+    legend,
     textarea,
     preview,
     getValue: () => textarea.value,

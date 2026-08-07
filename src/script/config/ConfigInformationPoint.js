@@ -20,6 +20,7 @@ export class ConfigInformationPoint{
         this.infoPointTemp = new Set();
         this.infoPointDescriptionTemp = "";
         this.selectedTelemetryTemp = "";
+        this.labelSettingsTemp = this.getDefaultLabelSettings();
         this.editingIndex = -1;
         this.ready = false;
 
@@ -174,6 +175,7 @@ export class ConfigInformationPoint{
             this.infoPointTemp.clear();
             this.infoPointDescriptionTemp = "";
             this.selectedTelemetryTemp = "";
+            this.labelSettingsTemp = this.getDefaultLabelSettings();
             list.replaceChildren();
             this.showDescriptionInfoPoint();
         });
@@ -188,7 +190,8 @@ export class ConfigInformationPoint{
                 name: this.infoPointNameTemp,
                 parte: Array.from(this.infoPointTemp),
                 descrizione: this.infoPointDescriptionTemp,
-                telemetria: this.selectedTelemetryTemp || null
+                telemetria: this.selectedTelemetryTemp || null,
+                label: { ...this.labelSettingsTemp }
             };
 
             if(this.editingIndex >= 0){
@@ -246,6 +249,7 @@ export class ConfigInformationPoint{
         this.infoPointTemp.clear();
         this.infoPointDescriptionTemp = "";
         this.selectedTelemetryTemp = "";
+        this.labelSettingsTemp = this.getDefaultLabelSettings();
         this.infoPointNameTemp = "";
         this.editingIndex = -1;
         this.ready = false;
@@ -271,6 +275,7 @@ export class ConfigInformationPoint{
         this.infoPointNameTemp = infoPoint.name;
         this.infoPointDescriptionTemp = infoPoint.descrizione || "";
         this.selectedTelemetryTemp = infoPoint.telemetria || "";
+        this.labelSettingsTemp = this.normalizeLabelSettings(infoPoint.label);
         this.infoPointTemp = new Set(infoPoint.parte || []);
 
         if(this.nameInputEl) this.nameInputEl.value = this.infoPointNameTemp;
@@ -313,7 +318,8 @@ export class ConfigInformationPoint{
                     ? infoPoint.parte
                     : (infoPoint.parte ? [infoPoint.parte] : []),
                 descrizione: infoPoint.descrizione || "",
-                telemetria: infoPoint.telemetria || ""
+                telemetria: infoPoint.telemetria || "",
+                label: this.normalizeLabelSettings(infoPoint.label)
             }));
 
         this.report();
@@ -530,6 +536,9 @@ export class ConfigInformationPoint{
         });
         this.descriptionEditor = editor;
 
+        const labelSettings = this.createLabelSettings();
+        editor.legend.insertAdjacentElement("afterend", labelSettings);
+
         // bottone finale
         const confirm = document.createElement("button");
         confirm.textContent = "Salva";
@@ -542,6 +551,136 @@ export class ConfigInformationPoint{
         
         wrapper.append(catalogWrapper, editor.wrapper, confirm, feedback);
         return wrapper;
+    }
+
+    getDefaultLabelSettings(){
+        return {
+            enabled: true,
+            position: "sopra",
+            alwaysVisible: true,
+            onlyWhenNear: false,
+            activationDistance: 2
+        };
+    }
+
+    normalizeLabelSettings(settings = {}){
+        const defaults = this.getDefaultLabelSettings();
+        const distance = Number(settings.activationDistance);
+        return {
+            enabled: settings.enabled ?? defaults.enabled,
+            position: ["sopra", "sinistra", "destra"].includes(settings.position)
+                ? settings.position
+                : defaults.position,
+            alwaysVisible: settings.alwaysVisible ?? defaults.alwaysVisible,
+            onlyWhenNear: settings.onlyWhenNear ?? defaults.onlyWhenNear,
+            activationDistance: Number.isFinite(distance) && distance >= 0
+                ? distance
+                : defaults.activationDistance
+        };
+    }
+
+    createLabelSettings(){
+        const settings = this.labelSettingsTemp;
+        const wrapper = document.createElement("section");
+        wrapper.className = "mt-3";
+
+        const title = document.createElement("div");
+        title.className = "fw-bold mb-2";
+        title.textContent = "Anteprima label in tempo reale";
+
+        const toggleRow = document.createElement("div");
+        toggleRow.className = "telemetry-label-toggle ctrl-section form-check form-switch";
+        const toggle = document.createElement("input");
+        toggle.className = "form-check-input";
+        toggle.type = "checkbox";
+        toggle.role = "switch";
+        toggle.id = "telemetryLabelEnabled";
+        toggle.checked = settings.enabled;
+        const toggleLabel = document.createElement("label");
+        toggleLabel.className = "form-check-label";
+        toggleLabel.htmlFor = toggle.id;
+        toggleLabel.textContent = "Mostrare una label della telemetria?";
+        toggleRow.append(toggle, toggleLabel);
+
+        const options = document.createElement("div");
+        options.className = "telemetry-label-options ctrl-section mt-3";
+        const heading = document.createElement("div");
+        heading.className = "fw-semibold mb-3";
+        heading.textContent = "Impostazioni label";
+
+        const grid = document.createElement("div");
+        grid.className = "telemetry-label-options-grid";
+        const position = this.createLabelField("Posizione", "select", settings.position, [
+            ["sopra", "Sopra"],
+            ["sinistra", "Sinistra"],
+            ["destra", "Destra"]
+        ]);
+        const alwaysVisible = this.createLabelField("Sempre visibile", "select", String(settings.alwaysVisible), [
+            ["true", "Sì"],
+            ["false", "No"]
+        ]);
+        const onlyWhenNear = this.createLabelField("Mostra solo quando vicino", "select", String(settings.onlyWhenNear), [
+            ["true", "Sì"],
+            ["false", "No"]
+        ]);
+        const distance = this.createLabelField("Distanza di attivazione", "number", settings.activationDistance);
+        distance.input.min = "0";
+        distance.input.step = "0.1";
+        distance.input.inputMode = "decimal";
+        distance.input.setAttribute("aria-label", "Distanza di attivazione in metri");
+        distance.input.classList.add("telemetry-label-distance");
+        const unit = document.createElement("span");
+        unit.className = "telemetry-label-unit";
+        unit.textContent = "metri";
+        distance.field.appendChild(unit);
+        grid.append(position.field, alwaysVisible.field, onlyWhenNear.field, distance.field);
+        options.append(heading, grid);
+
+        const updateVisibility = () => {
+            options.hidden = !toggle.checked;
+        };
+        toggle.addEventListener("change", () => {
+            this.labelSettingsTemp.enabled = toggle.checked;
+            updateVisibility();
+        });
+        position.input.addEventListener("change", () => { this.labelSettingsTemp.position = position.input.value; });
+        alwaysVisible.input.addEventListener("change", () => { this.labelSettingsTemp.alwaysVisible = alwaysVisible.input.value === "true"; });
+        onlyWhenNear.input.addEventListener("change", () => { this.labelSettingsTemp.onlyWhenNear = onlyWhenNear.input.value === "true"; });
+        distance.input.addEventListener("input", () => {
+            const value = Number(distance.input.value);
+            this.labelSettingsTemp.activationDistance = Number.isFinite(value) && value >= 0 ? value : 0;
+        });
+        updateVisibility();
+        wrapper.append(title, toggleRow, options);
+        return wrapper;
+    }
+
+    createLabelField(labelText, type, value, choices = []){
+        const field = document.createElement("div");
+        field.className = "telemetry-label-field";
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        let input;
+        if(type === "select"){
+            input = document.createElement("select");
+            input.className = "form-select";
+            choices.forEach(([optionValue, optionLabel]) => {
+                const option = document.createElement("option");
+                option.value = optionValue;
+                option.textContent = optionLabel;
+                input.appendChild(option);
+            });
+        }else{
+            input = document.createElement("input");
+            input.type = type;
+            input.className = "form-control";
+        }
+        const id = `telemetry-label-${labelText.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        input.id = id;
+        input.value = value;
+        label.htmlFor = id;
+        field.append(label, input);
+        return { field, input };
     }
 
     showDescriptionInfoPoint(initialValue = ""){

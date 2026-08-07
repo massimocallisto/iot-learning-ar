@@ -35,6 +35,7 @@ class InfoPointRuntime {
     this.telemetryTimer = null;
     this.telemetryRequestPending = false;
     this.currentInfoPoint = null;
+    this.labelElements = [];
 
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -45,6 +46,8 @@ class InfoPointRuntime {
     this.markerRadius = this.computeMarkerRadius();
 
     this.panel = this.createPanel();
+    this.updateLabels = this.updateLabels.bind(this);
+    this.removeFrameCallback = this.core.addFrameCallback(this.updateLabels);
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
@@ -134,11 +137,85 @@ class InfoPointRuntime {
 
       marker.userData.infoPoint = info;
       marker.userData.pickRadius = radius;
+      marker.userData.labelSettings = normalizeLabelSettings(info.label);
 
       // Figlio dello stesso pivot ruotato dai gesti AR: resta agganciato al modello.
       this.markerRoot.add(marker);
       this.markers.push(marker);
+      this.createTelemetryLabel(marker);
     });
+  }
+
+  createTelemetryLabel(marker) {
+    const settings = marker.userData.labelSettings;
+    const telemetryKey = marker.userData.infoPoint?.telemetria;
+    if (!settings.enabled || !telemetryKey) return;
+
+    const label = document.createElement("div");
+    label.className = "poi-telemetry-label";
+    label.setAttribute("aria-hidden", "true");
+    document.body.appendChild(label);
+    marker.userData.labelElement = label;
+    this.labelElements.push(label);
+    this.updateTelemetryLabel(marker);
+  }
+
+  updateLabels() {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const camera = getProjectionCamera(this.renderer.xr.isPresenting
+      ? this.renderer.xr.getCamera(this.camera)
+      : this.camera);
+    if (!camera || !rect.width || !rect.height) return;
+
+    const cameraPosition = camera.getWorldPosition(new THREE.Vector3());
+    for (const marker of this.markers) {
+      const label = marker.userData.labelElement;
+      if (!label) continue;
+
+      marker.updateMatrixWorld(true);
+      marker.getWorldPosition(this.tmpWorldPosition);
+      this.tmpScreenPosition.copy(this.tmpWorldPosition).project(camera);
+      const settings = marker.userData.labelSettings;
+      const selected = this.currentInfoPoint === marker.userData.infoPoint;
+      const withinDistance = cameraPosition.distanceTo(this.tmpWorldPosition) <= settings.activationDistance;
+      const visible = this.tmpScreenPosition.z >= -1
+        && this.tmpScreenPosition.z <= 1
+        && (settings.alwaysVisible || selected)
+        && (!settings.onlyWhenNear || withinDistance);
+      if (!visible) {
+        label.style.display = "none";
+        continue;
+      }
+
+      const x = rect.left + (this.tmpScreenPosition.x * 0.5 + 0.5) * rect.width;
+      const y = rect.top + (-this.tmpScreenPosition.y * 0.5 + 0.5) * rect.height;
+      const offset = 18;
+      let transform = "translate(-50%, -100%)";
+      let left = x;
+      let top = y - offset;
+      if (settings.position === "sinistra") {
+        left = x - offset;
+        transform = "translate(-100%, -50%)";
+        top = y;
+      } else if (settings.position === "destra") {
+        left = x + offset;
+        transform = "translate(0, -50%)";
+        top = y;
+      }
+      label.style.display = "block";
+      label.style.left = `${left}px`;
+      label.style.top = `${top}px`;
+      label.style.transform = transform;
+    }
+  }
+
+  updateTelemetryLabel(marker) {
+    const label = marker.userData.labelElement;
+    const key = marker.userData.infoPoint?.telemetria;
+    if (!label || !key) return;
+    const point = this.telemetryValues?.[key];
+    const value = point?.value ?? "—";
+    label.textContent = `${key}: ${value}`;
   }
 
   computeMarkerPosition({ box, modelCenter, size, radius, worldCenter }) {
@@ -438,6 +515,7 @@ class InfoPointRuntime {
     this.renderInfoPointDescription();
 
     this.panel.style.display = "block";
+    this.updateLabels();
     this.startTelemetryUpdates();
 
     if (this.viewer.xr.isPresenting) {
@@ -449,6 +527,7 @@ class InfoPointRuntime {
     this.panel.style.display = "none";
     this.currentInfoPoint = null;
     this.stopTelemetryUpdates();
+    this.updateLabels();
     document.querySelector("#control")?.classList.remove("open");
   }
 
@@ -486,6 +565,7 @@ class InfoPointRuntime {
     try {
       this.telemetryValues = await this.telemetryProvider();
       this.renderInfoPointDescription();
+      this.markers.forEach((marker) => this.updateTelemetryLabel(marker));
     } catch (error) {
       console.warn("Aggiornamento telemetria information point non riuscito:", error);
     } finally {
@@ -503,6 +583,7 @@ class InfoPointRuntime {
 
   dispose() {
     this.stopTelemetryUpdates();
+    this.removeFrameCallback?.();
     this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown);
 
     const overlay = document.querySelector("#ar-overlay");
@@ -516,6 +597,8 @@ class InfoPointRuntime {
     });
 
     this.markers = [];
+    this.labelElements.forEach((label) => label.remove());
+    this.labelElements = [];
     this.panel.remove();
   }
 }
@@ -523,6 +606,19 @@ class InfoPointRuntime {
 function normalizeParts(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function normalizeLabelSettings(settings = {}) {
+  const distance = Number(settings.activationDistance);
+  return {
+    enabled: settings.enabled ?? true,
+    position: ["sopra", "sinistra", "destra"].includes(settings.position)
+      ? settings.position
+      : "sopra",
+    alwaysVisible: settings.alwaysVisible ?? true,
+    onlyWhenNear: settings.onlyWhenNear ?? false,
+    activationDistance: Number.isFinite(distance) && distance >= 0 ? distance : 2
+  };
 }
 
 function replaceTelemetryPlaceholders(description, telemetry) {

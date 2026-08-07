@@ -42,7 +42,8 @@ export function buildConfigJson({ groupMesh, visible, information, finalInformat
         parte: normalize(infoPoint.parte),
         formato: "markdown",
         descrizione: infoPoint.descrizione,
-        telemetria: infoPoint.telemetria || null
+        telemetria: infoPoint.telemetria || null,
+        label: infoPoint.label || undefined
       }))
     });
   }

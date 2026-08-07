@@ -60,6 +60,7 @@ export class ViewerCore {
 
     
         this.frameN = 0;
+        this.frameCallbacks = new Set();
 
         this.resize();
 
@@ -72,6 +73,7 @@ export class ViewerCore {
             }
 
             onFrame?.(time, frame);
+            this.frameCallbacks.forEach((callback) => callback(time, frame));
 
             this.renderer.render(this.scene, this.camera);
         });
@@ -90,6 +92,11 @@ export class ViewerCore {
         this.camera.updateProjectionMatrix();
 
         this.renderer.setSize(w, h, false);
+    }
+
+    addFrameCallback(callback) {
+        this.frameCallbacks.add(callback);
+        return () => this.frameCallbacks.delete(callback);
     }
 
     dispose() {
