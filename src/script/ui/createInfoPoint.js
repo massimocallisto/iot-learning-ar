@@ -79,6 +79,7 @@ class InfoPointRuntime {
 
 
     this.createMarkers();
+    this.startTelemetryUpdates();
   }
 
   createMarkers() {
@@ -516,7 +517,6 @@ class InfoPointRuntime {
 
     this.panel.style.display = "block";
     this.updateLabels();
-    this.startTelemetryUpdates();
 
     if (this.viewer.xr.isPresenting) {
       document.querySelector("#control")?.classList.add("open");
