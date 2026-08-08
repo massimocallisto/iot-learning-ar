@@ -139,6 +139,49 @@ html, body {
   margin-bottom: 4px;
 }
 
+.device-telemetry-list {
+  display: grid;
+  gap: 8px;
+}
+
+.device-telemetry-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e6ea;
+}
+
+.device-telemetry-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.device-telemetry-item dt,
+.device-telemetry-item dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.device-telemetry-item dt {
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.device-telemetry-item dd {
+  font-weight: 700;
+  text-align: right;
+}
+
+.device-telemetry-message {
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.device-telemetry-error {
+  color: #b42318;
+}
+
 /* =========================
    VIEWER
 ========================= */

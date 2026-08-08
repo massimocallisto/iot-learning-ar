@@ -167,5 +167,16 @@ export const experienceService = {
     if (!response.ok) throw new Error(await readError(response));
     const data = await response.json();
     return data.telemetry || {};
+  },
+
+  async getPublicExperienceDeviceData(id) {
+    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/telemetry`);
+    if (!response.ok) throw new Error(await readError(response));
+    const data = await response.json();
+    return {
+      telemetry: data.telemetry || {},
+      deviceName: data.deviceName || '',
+      deviceConnected: data.deviceConnected === true
+    };
   }
 };

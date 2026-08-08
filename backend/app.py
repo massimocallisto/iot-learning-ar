@@ -43,6 +43,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
 CORS(app, resources={r"/*": {"origins": CORS_ORIGIN}}, supports_credentials=False)
 thingsboard_service = ThingsBoardService()
+device_name_cache: dict[str, str] = {}
 
 
 @app.after_request
@@ -425,10 +426,23 @@ def public_experience_telemetry(experience_id: str) -> tuple[Response, int] | Re
     if not row:
         return jsonify({"error": "Esperienza non trovata"}), 404
     if not row["device_id"]:
-        return jsonify({"telemetry": {}})
+        return jsonify({"telemetry": {}, "deviceName": "", "deviceConnected": False})
 
     try:
-        return jsonify({"telemetry": thingsboard_service.get_latest_telemetry(row["device_id"])})
+        device_id = row["device_id"]
+        device_name = device_name_cache.get(device_id, "")
+        if not device_name:
+            device_name = next(
+                (device["name"] for device in thingsboard_service.list_devices() if device["id"] == device_id),
+                "",
+            )
+            if device_name:
+                device_name_cache[device_id] = device_name
+        return jsonify({
+            "telemetry": thingsboard_service.get_latest_telemetry(device_id),
+            "deviceName": device_name,
+            "deviceConnected": True,
+        })
     except ThingsBoardError as error:
         return jsonify({"error": str(error)}), 502
 

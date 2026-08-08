@@ -5,6 +5,13 @@ import { ThreeViewer } from '../script/viewer/ThreeViewer.js';
 import { experienceService } from '../services/experienceService.js';
 import { viewerSession } from '../services/viewerSession.js';
 
+function formatTelemetryValue(point) {
+  const value = point?.value;
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
 export function ViewerPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -13,6 +20,7 @@ export function ViewerPage() {
   const viewerRef = useRef(null);
   const uploadIdRef = useRef(viewerSession.getId());
   const [payload, setPayload] = useState(null);
+  const [telemetry, setTelemetry] = useState({ loading: false, values: {}, deviceName: '', deviceConnected: false, error: '' });
 
   const publicExperienceId = searchParams.get('experienceId') || '';
   const returnTeacherCode = searchParams.get('teacherCode') || '';
@@ -92,6 +100,38 @@ export function ViewerPage() {
   }, [navigate, publicExperienceId]);
 
   useEffect(() => {
+    if (!publicExperienceId) return undefined;
+    let cancelled = false;
+
+    const refreshTelemetry = async () => {
+      try {
+        const data = await experienceService.getPublicExperienceDeviceData(publicExperienceId);
+        if (!cancelled) setTelemetry({
+          loading: false,
+          values: data.telemetry,
+          deviceName: data.deviceName,
+          deviceConnected: data.deviceConnected,
+          error: ''
+        });
+      } catch (err) {
+        if (!cancelled) setTelemetry((current) => ({
+          ...current,
+          loading: false,
+          error: err instanceof Error ? err.message : 'Impossibile caricare i dati del device.'
+        }));
+      }
+    };
+
+    setTelemetry({ loading: true, values: {}, deviceName: '', deviceConnected: false, error: '' });
+    void refreshTelemetry();
+    const timer = window.setInterval(() => void refreshTelemetry(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [publicExperienceId]);
+
+  useEffect(() => {
     if (!payload || !canvasRef.current || !hostRef.current || viewerRef.current) return;
 
     let disposed = false;
@@ -153,6 +193,34 @@ export function ViewerPage() {
           <div className="d-flex align-items-center justify-content-between mb-2">
             <div id="gesture-debug" />
           </div>
+
+          {payload?.isPublic && telemetry.deviceConnected && (
+            <section className="ctrl-section device-telemetry-section" aria-live="polite">
+              <div className="ctrl-title">Dati del device collegato</div>
+              {telemetry.loading ? (
+                <p className="device-telemetry-message mb-0">Caricamento dati...</p>
+              ) : telemetry.error ? (
+                <p className="device-telemetry-message device-telemetry-error mb-0">{telemetry.error}</p>
+              ) : Object.keys(telemetry.values).length || telemetry.deviceName ? (
+                <dl className="device-telemetry-list mb-0">
+                  <div className="device-telemetry-item">
+                    <dt>Nome</dt>
+                    <dd>{telemetry.deviceName || '—'}</dd>
+                  </div>
+                  {Object.entries(telemetry.values)
+                    .sort(([firstKey], [secondKey]) => firstKey.localeCompare(secondKey))
+                    .map(([key, point]) => (
+                      <div key={key} className="device-telemetry-item">
+                        <dt>{key}</dt>
+                        <dd>{formatTelemetryValue(point)}</dd>
+                      </div>
+                    ))}
+                </dl>
+              ) : (
+                <p className="device-telemetry-message mb-0">Nessun dato disponibile dal device.</p>
+              )}
+            </section>
+          )}
 
           <div id="imperative-control-root" />
         </div>
