@@ -46,14 +46,6 @@ thingsboard_service = ThingsBoardService()
 device_name_cache: dict[str, str] = {}
 
 
-@app.after_request
-def add_cors_headers(response: Response) -> Response:
-    response.headers.setdefault("Access-Control-Allow-Origin", CORS_ORIGIN)
-    response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
-    response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    return response
-
-
 @app.route("/api/health", methods=["GET"])
 def health() -> Response:
     return jsonify({"ok": True})
@@ -465,28 +457,7 @@ def upload_pair() -> tuple[Response, int] | Response:
     if not glb_buffer or not json_buffer:
         return jsonify({"error": "File vuoti o base64 non valido"}), 400
 
-    upload_id = str(uuid.uuid4())
-    created_at = now_iso()
-    expires_at = get_expiration_iso()
-    directory = upload_dir_from_id(upload_id)
-    directory.mkdir(parents=True, exist_ok=True)
-
-    glb_name = sanitize_filename(body.get("glbName"), "model.glb")
-    json_name = sanitize_filename(body.get("jsonName"), "config.json")
-    glb_mime = str(body.get("glbMime") or "model/gltf-binary")
-    json_mime = str(body.get("jsonMime") or "application/json")
-
-    (directory / "model.glb").write_bytes(glb_buffer)
-    (directory / "config.json").write_bytes(json_buffer)
-
-    meta = {
-        "id": upload_id,
-        "createdAt": created_at,
-        "expiresAt": expires_at,
-        "glb": {"storedAs": "model.glb", "originalName": glb_name, "mime": glb_mime, "size": len(glb_buffer)},
-        "json": {"storedAs": "config.json", "originalName": json_name, "mime": json_mime, "size": len(json_buffer)},
-    }
-    meta_path_from_id(upload_id).write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    meta = create_upload_meta(body, glb_buffer, json_buffer)
     return jsonify(build_payload_response(meta)), 201
 
 
@@ -506,23 +477,7 @@ def upload_glb_only() -> tuple[Response, int] | Response:
     if not glb_buffer:
         return jsonify({"error": "File vuoto o base64 non valido"}), 400
 
-    upload_id = str(uuid.uuid4())
-    created_at = now_iso()
-    expires_at = get_expiration_iso()
-    directory = upload_dir_from_id(upload_id)
-    directory.mkdir(parents=True, exist_ok=True)
-
-    glb_name = sanitize_filename(body.get("glbName"), "model.glb")
-    glb_mime = str(body.get("glbMime") or "model/gltf-binary")
-    (directory / "model.glb").write_bytes(glb_buffer)
-
-    meta = {
-        "id": upload_id,
-        "createdAt": created_at,
-        "expiresAt": expires_at,
-        "glb": {"storedAs": "model.glb", "originalName": glb_name, "mime": glb_mime, "size": len(glb_buffer)},
-    }
-    meta_path_from_id(upload_id).write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    meta = create_upload_meta(body, glb_buffer)
     return jsonify(build_payload_response_glb(meta)), 201
 
 
@@ -772,6 +727,35 @@ def strip_data_url_prefix(value: Any) -> str:
 
 def get_expiration_iso() -> str:
     return (datetime.now(timezone.utc) + timedelta(milliseconds=TTL_MS)).isoformat().replace("+00:00", "Z")
+
+
+def create_upload_meta(body: dict[str, Any], glb_buffer: bytes, json_buffer: bytes | None = None) -> dict[str, Any]:
+    upload_id = str(uuid.uuid4())
+    directory = upload_dir_from_id(upload_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "model.glb").write_bytes(glb_buffer)
+
+    meta: dict[str, Any] = {
+        "id": upload_id,
+        "createdAt": now_iso(),
+        "expiresAt": get_expiration_iso(),
+        "glb": {
+            "storedAs": "model.glb",
+            "originalName": sanitize_filename(body.get("glbName"), "model.glb"),
+            "mime": str(body.get("glbMime") or "model/gltf-binary"),
+            "size": len(glb_buffer),
+        },
+    }
+    if json_buffer is not None:
+        (directory / "config.json").write_bytes(json_buffer)
+        meta["json"] = {
+            "storedAs": "config.json",
+            "originalName": sanitize_filename(body.get("jsonName"), "config.json"),
+            "mime": str(body.get("jsonMime") or "application/json"),
+            "size": len(json_buffer),
+        }
+    meta_path_from_id(upload_id).write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return meta
 
 
 def upload_dir_from_id(upload_id: str) -> Path:

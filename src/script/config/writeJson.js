@@ -1,10 +1,3 @@
-export function exportJson({ groupMesh, visible, information, finalInformation, infoPoints } = {}) {
-  const json = buildConfigJson({ groupMesh, visible, information, finalInformation, infoPoints });
-  downloadJSON(json, "config.json");
-  return json;
-}
-
-
 export function buildConfigJson({ groupMesh, visible, information, finalInformation, infoPoints } = {}) {
   const json = {};
   const groups = [];
@@ -73,16 +66,4 @@ function normalize(value) {
   }
 
   return value;
-}
-
-function downloadJSON(obj, fileName) {
-  const json = JSON.stringify(obj, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = fileName;
-  a.click();
-
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

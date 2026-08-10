@@ -2,16 +2,8 @@ import { getApiOrigin, readError } from './api.js';
 
 class ViewerSession {
   glbFile = undefined;
-  jsonFile = undefined;
   id = undefined;
   deviceId = null;
-
-  async setFiles(glb, json) {
-    this.glbFile = glb;
-    this.jsonFile = json;
-    const data = await this.saveFiles();
-    this.id = data.id;
-  }
 
   async setFile(glb) {
     this.glbFile = glb;
@@ -51,7 +43,6 @@ class ViewerSession {
 
   clear() {
     this.glbFile = undefined;
-    this.jsonFile = undefined;
     this.id = undefined;
     this.deviceId = null;
   }
@@ -68,28 +59,6 @@ class ViewerSession {
     }
 
     this.clear();
-  }
-
-  async saveFiles() {
-    if (!this.glbFile || !this.jsonFile) throw new Error('File GLB/JSON non disponibili.');
-    const glbBase64 = await this.fileToBase64(this.glbFile);
-    const jsonBase64 = await this.fileToBase64(this.jsonFile);
-
-    const response = await fetch(`${getApiOrigin()}/api/uploads`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        glbBase64,
-        jsonBase64,
-        glbName: 'model.glb',
-        jsonName: 'config.json',
-        glbMime: 'model/gltf-binary',
-        jsonMime: 'application/json'
-      })
-    });
-
-    if (!response.ok) throw new Error(await readError(response));
-    return response.json();
   }
 
   async saveFile() {
