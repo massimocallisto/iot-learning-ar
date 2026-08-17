@@ -32,7 +32,6 @@ class InfoPointRuntime {
       ? options.telemetryProvider
       : null;
     this.telemetryValues = {};
-    this.telemetryTimer = null;
     this.telemetryRequestPending = false;
     this.currentInfoPoint = null;
     this.labelElements = [];
@@ -50,7 +49,9 @@ class InfoPointRuntime {
     this.removeFrameCallback = this.core.addFrameCallback(this.updateLabels);
 
     this.onPointerDown = this.onPointerDown.bind(this);
+    this.onTelemetryUpdate = this.onTelemetryUpdate.bind(this);
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
+    window.addEventListener("experience:telemetry", this.onTelemetryUpdate);
 
     this.onXRSelect = this.onXRSelect.bind(this);
     this.onAROverlayPointerDown = this.onAROverlayPointerDown.bind(this);
@@ -526,7 +527,6 @@ class InfoPointRuntime {
   hidePanel() {
     this.panel.style.display = "none";
     this.currentInfoPoint = null;
-    this.stopTelemetryUpdates();
     this.updateLabels();
     document.querySelector("#control")?.classList.remove("open");
   }
@@ -544,19 +544,14 @@ class InfoPointRuntime {
   }
 
   startTelemetryUpdates() {
-    this.stopTelemetryUpdates();
     if (!this.telemetryProvider) return;
     void this.refreshTelemetry();
-    this.telemetryTimer = window.setInterval(() => {
-      void this.refreshTelemetry();
-    }, 3000);
   }
 
-  stopTelemetryUpdates() {
-    if (this.telemetryTimer !== null) {
-      window.clearInterval(this.telemetryTimer);
-      this.telemetryTimer = null;
-    }
+  onTelemetryUpdate(event) {
+    this.telemetryValues = event.detail || {};
+    this.renderInfoPointDescription();
+    this.markers.forEach((marker) => this.updateTelemetryLabel(marker));
   }
 
   async refreshTelemetry() {
@@ -582,9 +577,9 @@ class InfoPointRuntime {
   }
 
   dispose() {
-    this.stopTelemetryUpdates();
     this.removeFrameCallback?.();
     this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown);
+    window.removeEventListener("experience:telemetry", this.onTelemetryUpdate);
 
     const overlay = document.querySelector("#ar-overlay");
     overlay?.removeEventListener("pointerdown", this.onAROverlayPointerDown);

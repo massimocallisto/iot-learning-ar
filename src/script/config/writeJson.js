@@ -1,6 +1,5 @@
-export function buildConfigJson({ groupMesh, visible, information, finalInformation, infoPoints } = {}) {
+export function buildConfigJson({ information, finalInformation, infoPoints } = {}) {
   const json = {};
-  const groups = [];
   const regole = [];
 
   if(information){

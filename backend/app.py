@@ -18,6 +18,7 @@ import bcrypt
 import jwt
 from flask import Flask, Response, jsonify, request, send_file
 from flask_cors import CORS
+from flask_sock import Sock
 
 from db import execute, fetch_all, fetch_one, init_db
 from thingsboard_service import ThingsBoardError, ThingsBoardService
@@ -42,8 +43,11 @@ BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
 CORS(app, resources={r"/*": {"origins": CORS_ORIGIN}}, supports_credentials=False)
+sock = Sock(app)
 thingsboard_service = ThingsBoardService()
 device_name_cache: dict[str, str] = {}
+simulators: dict[str, threading.Event] = {}
+simulators_lock = threading.Lock()
 
 
 @app.route("/api/health", methods=["GET"])
@@ -269,6 +273,90 @@ def get_iot_device_status(device_id: str) -> tuple[Response, int] | Response:
         return jsonify({"error": str(error)}), 502
 
 
+@app.route("/api/iot/devices/<device_id>/simulation", methods=["GET"])
+def get_iot_device_simulation(device_id: str) -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+    return jsonify({"active": simulation_is_active(device_id)})
+
+
+@app.route("/api/iot/devices/<device_id>/simulation", methods=["POST"])
+def start_iot_device_simulation(device_id: str) -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+    body = request.get_json(silent=True) or {}
+    try:
+        interval = float(body.get("intervalSeconds", 15))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Intervallo simulazione non valido"}), 400
+    if not 1 <= interval <= 3600:
+        return jsonify({"error": "L'intervallo deve essere compreso tra 1 e 3600 secondi"}), 400
+
+    try:
+        if not any(device["id"] == device_id for device in thingsboard_service.list_devices()):
+            return jsonify({"error": "Dispositivo ThingsBoard non disponibile"}), 404
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+
+    try:
+        first_values = start_simulator(device_id, interval)
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+    return jsonify({"active": True, "intervalSeconds": interval, "telemetry": first_values}), 202
+
+
+@app.route("/api/iot/devices/<device_id>/simulation", methods=["DELETE"])
+def stop_iot_device_simulation(device_id: str) -> tuple[Response, int] | Response:
+    teacher = require_auth_or_response()
+    if isinstance(teacher, tuple):
+        return teacher
+    stop_simulator(device_id)
+    return jsonify({"active": False})
+
+
+@app.route("/api/public/experiences/<experience_id>/simulation", methods=["GET", "POST", "DELETE"])
+def public_experience_simulation(experience_id: str) -> tuple[Response, int] | Response:
+    row = load_public_experience_for_code(experience_id, request.args.get("teacherCode"))
+    if not row or not row["device_id"]:
+        return jsonify({"error": "Esperienza non autorizzata o senza device"}), 404
+
+    device_id = row["device_id"]
+    if request.method == "GET":
+        return jsonify({"active": simulation_is_active(device_id)})
+    if request.method == "DELETE":
+        stop_simulator(device_id)
+        return jsonify({"active": False})
+
+    try:
+        telemetry = start_simulator(device_id, 15)
+        return jsonify({"active": True, "intervalSeconds": 15, "telemetry": telemetry}), 202
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+
+
+@sock.route("/api/ws/experiences/<experience_id>/telemetry")
+def public_experience_telemetry_ws(ws, experience_id: str) -> None:
+    row = load_public_experience_for_code(experience_id, request.args.get("teacherCode"))
+    if not row or not row["device_id"]:
+        ws.close(reason="Esperienza non autorizzata o senza device")
+        return
+
+    device_id = row["device_id"]
+    try:
+        ws.send(json.dumps({
+            "type": "telemetry",
+            "telemetry": thingsboard_service.get_latest_telemetry(device_id),
+            "deviceName": get_device_name(device_id),
+            "deviceConnected": True,
+        }))
+        for telemetry in thingsboard_service.stream_telemetry(device_id):
+            ws.send(json.dumps({"type": "telemetry", "telemetry": telemetry}))
+    except Exception as error:
+        app.logger.warning("[realtime] %s", error)
+
+
 @app.route("/api/experiences/<experience_id>", methods=["GET"])
 def get_experience(experience_id: str) -> tuple[Response, int] | Response:
     teacher = require_auth_or_response()
@@ -414,25 +502,17 @@ def public_experience_json(experience_id: str) -> tuple[Response, int] | Respons
 
 @app.route("/api/public/experiences/<experience_id>/telemetry", methods=["GET"])
 def public_experience_telemetry(experience_id: str) -> tuple[Response, int] | Response:
-    row = load_experience_or_null(experience_id)
+    row = load_public_experience_for_code(experience_id, request.args.get("teacherCode"))
     if not row:
-        return jsonify({"error": "Esperienza non trovata"}), 404
+        return jsonify({"error": "Esperienza non trovata o codice docente non valido"}), 404
     if not row["device_id"]:
         return jsonify({"telemetry": {}, "deviceName": "", "deviceConnected": False})
 
     try:
         device_id = row["device_id"]
-        device_name = device_name_cache.get(device_id, "")
-        if not device_name:
-            device_name = next(
-                (device["name"] for device in thingsboard_service.list_devices() if device["id"] == device_id),
-                "",
-            )
-            if device_name:
-                device_name_cache[device_id] = device_name
         return jsonify({
             "telemetry": thingsboard_service.get_latest_telemetry(device_id),
-            "deviceName": device_name,
+            "deviceName": get_device_name(device_id),
             "deviceConnected": True,
         })
     except ThingsBoardError as error:
@@ -650,6 +730,77 @@ def load_experience_or_null(experience_id: str):
         """,
         (experience_id,),
     )
+
+
+def load_public_experience_for_code(experience_id: str, access_code: Any):
+    code = normalize_access_code(access_code)
+    if not code:
+        return None
+    return fetch_one(
+        """
+        SELECT experiences.*
+        FROM experiences
+        JOIN teachers ON teachers.id = experiences.teacher_id
+        WHERE experiences.id = ? AND teachers.access_code = ?
+        """,
+        (experience_id, code),
+    )
+
+
+def get_device_name(device_id: str) -> str:
+    name = device_name_cache.get(device_id, "")
+    if not name:
+        devices = thingsboard_service.list_devices()
+        device_name_cache.update({device["id"]: device["name"] for device in devices})
+        name = device_name_cache.get(device_id, "")
+    return name
+
+
+def simulation_is_active(device_id: str) -> bool:
+    with simulators_lock:
+        return device_id in simulators
+
+
+def start_simulator(device_id: str, interval: float) -> dict[str, Any]:
+    with simulators_lock:
+        if device_id in simulators:
+            return {}
+        stop_event = threading.Event()
+        simulators[device_id] = stop_event
+
+    try:
+        first_values = thingsboard_service.simulated_values(device_id)
+        thingsboard_service.publish_device_telemetry(device_id, first_values)
+        app.logger.info("[simulator] %s: %s", device_id, first_values)
+    except ThingsBoardError:
+        remove_simulator(device_id, stop_event)
+        raise
+
+    def simulate() -> None:
+        try:
+            while not stop_event.wait(interval):
+                values = thingsboard_service.simulated_values(device_id)
+                thingsboard_service.publish_device_telemetry(device_id, values)
+                app.logger.info("[simulator] %s: %s", device_id, values)
+        except ThingsBoardError as error:
+            app.logger.error("[simulator] %s", error)
+        finally:
+            remove_simulator(device_id, stop_event)
+
+    threading.Thread(target=simulate, daemon=True).start()
+    return first_values
+
+
+def stop_simulator(device_id: str) -> None:
+    with simulators_lock:
+        stop_event = simulators.pop(device_id, None)
+    stop_event and stop_event.set()
+
+
+def remove_simulator(device_id: str, stop_event: threading.Event) -> None:
+    with simulators_lock:
+        if simulators.get(device_id) is stop_event:
+            simulators.pop(device_id)
 
 
 def validate_teacher_credentials(name: str, email: str, password: str) -> str:

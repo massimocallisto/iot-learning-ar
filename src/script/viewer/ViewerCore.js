@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 export class ViewerCore {
-    constructor({canvas, container, onFrame}) {
+    constructor({canvas, container}) {
         this.canvas = canvas;
         this.container = container;
 
@@ -34,7 +34,6 @@ export class ViewerCore {
         this.renderer.xr.addEventListener("sessionstart", () => {
             // In AR disabilita orbit controls desktop.
             if (this.controls) this.controls.enabled = false;
-            this.occlusion?.onSessionStart?.();
         });
 
         this.renderer.xr.addEventListener("sessionend", () => {
@@ -56,10 +55,6 @@ export class ViewerCore {
         this._onResize = () => this.resize();
         window.addEventListener("resize", this._onResize);
 
-        this.resize();
-
-    
-        this.frameN = 0;
         this.frameCallbacks = new Set();
 
         this.resize();
@@ -72,7 +67,6 @@ export class ViewerCore {
                 }
             }
 
-            onFrame?.(time, frame);
             this.frameCallbacks.forEach((callback) => callback(time, frame));
 
             this.renderer.render(this.scene, this.camera);
@@ -136,36 +130,6 @@ export class ViewerCore {
         this.controls.enablePan = false;
         this.controls.target.set(0, 0, 0);
         this.controls.update();
-    }
-
-    debug(msg) {
-        if (!this.debugEl || !this.debugEl.isConnected) {
-            this.debugEl = document.querySelector("#gesture-debug");
-        }
-        if (this.debugEl) this.debugEl.textContent = msg;
-    }
-
-    _resizeFromXRFrame(frame) {
-        // Ridimensiona renderer al viewport XR reale del device.
-        const session = this.renderer.xr.getSession?.();
-        const refSpace = this.renderer.xr.getReferenceSpace?.();
-        if (!session || !refSpace || !frame) return false;
-
-        const pose = frame.getViewerPose(refSpace);
-        if (!pose || !pose.views || pose.views.length === 0) return false;
-
-        const baseLayer = session.renderState?.baseLayer;
-        if (!baseLayer || !baseLayer.getViewport) return false;
-
-        const vp = baseLayer.getViewport(pose.views[0]);
-        if (!vp) return false;
-
-        this.renderer.setSize(vp.width, vp.height, false);
-
-        this.camera.aspect = vp.width / vp.height;
-        this.camera.updateProjectionMatrix();
-
-        return true;
     }
 
 }

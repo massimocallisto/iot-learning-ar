@@ -8,7 +8,8 @@ const backendTarget = process.env.BACKEND_URL || 'https://localhost:3001';
 const backendProxy = {
   target: backendTarget,
   changeOrigin: true,
-  secure: false
+  secure: false,
+  ws: true
 };
 
 function httpsConfig() {

@@ -35,6 +35,8 @@ export function ConfigurationPage() {
   const [isTelemetryLoading, setIsTelemetryLoading] = useState(false);
   const [telemetryError, setTelemetryError] = useState('');
   const [isDeviceActive, setIsDeviceActive] = useState(false);
+  const [isSimulationActive, setIsSimulationActive] = useState(false);
+  const [isSimulationLoading, setIsSimulationLoading] = useState(false);
 
   useEffect(() => {
     titleRef.current = experienceTitle;
@@ -132,6 +134,7 @@ export function ConfigurationPage() {
       telemetryCatalogRef.current = [];
       telemetryValuesRef.current = {};
       setIsDeviceActive(false);
+      setIsSimulationActive(false);
       window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
         detail: { keys: [], values: {}, deviceConnected: false, loading: false }
       }));
@@ -145,6 +148,7 @@ export function ConfigurationPage() {
     telemetryCatalogRef.current = [];
     telemetryValuesRef.current = {};
     setIsDeviceActive(false);
+    setIsSimulationActive(false);
     window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
       detail: { keys: [], values: {}, deviceConnected: true, loading: true }
     }));
@@ -152,14 +156,16 @@ export function ConfigurationPage() {
       experienceService.getIotDeviceLatestTelemetry(selectedDeviceId),
       experienceService.getIotDeviceTelemetryCatalog(selectedDeviceId),
       experienceService.getIotDeviceTelemetry(selectedDeviceId),
-      experienceService.getIotDeviceStatus(selectedDeviceId).catch(() => false)
+      experienceService.getIotDeviceStatus(selectedDeviceId).catch(() => false),
+      experienceService.getIotDeviceSimulation(selectedDeviceId).catch(() => false)
     ])
-      .then(([timestamp, keys, values, active]) => {
+      .then(([timestamp, keys, values, active, simulationActive]) => {
         if (!cancelled) {
           setLastTelemetryTs(timestamp);
           telemetryCatalogRef.current = keys;
           telemetryValuesRef.current = values;
           setIsDeviceActive(active);
+          setIsSimulationActive(simulationActive);
           window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
             detail: { keys, values, deviceConnected: true, loading: false }
           }));
@@ -188,6 +194,19 @@ export function ConfigurationPage() {
     setSelectedDeviceId(deviceId);
     viewerSession.setDeviceId(deviceId || null);
     setIsDevicePickerOpen(false);
+  }
+
+  async function toggleSimulation() {
+    if (!selectedDeviceId || isSimulationLoading) return;
+    setIsSimulationLoading(true);
+    setTelemetryError('');
+    try {
+      setIsSimulationActive(await experienceService.setIotDeviceSimulation(selectedDeviceId, !isSimulationActive));
+    } catch (err) {
+      setTelemetryError(err instanceof Error ? err.message : 'Impossibile modificare la simulazione.');
+    } finally {
+      setIsSimulationLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -379,6 +398,9 @@ export function ConfigurationPage() {
                   </span>
                   <button type="button" className="btn btn-sm btn-primary ms-auto" onClick={() => { setIsDevicePickerOpen(true); void loadIotDevices(); }}>
                     Cambia device
+                  </button>
+                  <button type="button" className={`btn btn-sm ${isSimulationActive ? 'btn-outline-danger' : 'btn-outline-success'}`} disabled={isSimulationLoading} onClick={() => void toggleSimulation()}>
+                    {isSimulationLoading ? 'Attendere...' : isSimulationActive ? 'Ferma simulazione' : 'Avvia simulazione'}
                   </button>
                 </div>
               </>

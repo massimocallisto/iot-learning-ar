@@ -1,4 +1,4 @@
-import { getApiBase, readError } from './api.js';
+import { getApiBase, getApiOrigin, readError } from './api.js';
 import { authService } from './authService.js';
 
 let iotDevicesCache = null;
@@ -61,6 +61,24 @@ export const experienceService = {
     if (!response.ok) throw new Error(await readError(response));
     const data = await response.json();
     return data.active === true;
+  },
+
+  async getIotDeviceSimulation(deviceId) {
+    const response = await fetch(`${getApiBase()}/iot/devices/${encodeURIComponent(deviceId)}/simulation`, {
+      headers: authService.authHeaders()
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    return (await response.json()).active === true;
+  },
+
+  async setIotDeviceSimulation(deviceId, active) {
+    const response = await fetch(`${getApiBase()}/iot/devices/${encodeURIComponent(deviceId)}/simulation`, {
+      method: active ? 'POST' : 'DELETE',
+      headers: active ? { 'Content-Type': 'application/json', ...authService.authHeaders() } : authService.authHeaders(),
+      body: active ? JSON.stringify({ intervalSeconds: 15 }) : undefined
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    return (await response.json()).active === true;
   },
 
   async getMyExperiences() {
@@ -161,22 +179,60 @@ export const experienceService = {
     return response;
   },
 
-  async getPublicExperienceTelemetry(id) {
-    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/telemetry`);
+  async getPublicExperienceTelemetry(id, teacherCode) {
+    const query = new URLSearchParams({ teacherCode });
+    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/telemetry?${query}`);
 
     if (!response.ok) throw new Error(await readError(response));
     const data = await response.json();
     return data.telemetry || {};
   },
 
-  async getPublicExperienceDeviceData(id) {
-    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/telemetry`);
+  async getPublicExperienceSimulation(id, teacherCode) {
+    const query = new URLSearchParams({ teacherCode });
+    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/simulation?${query}`);
     if (!response.ok) throw new Error(await readError(response));
-    const data = await response.json();
-    return {
-      telemetry: data.telemetry || {},
-      deviceName: data.deviceName || '',
-      deviceConnected: data.deviceConnected === true
+    return (await response.json()).active === true;
+  },
+
+  async setPublicExperienceSimulation(id, teacherCode, active) {
+    const query = new URLSearchParams({ teacherCode });
+    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/simulation?${query}`, {
+      method: active ? 'POST' : 'DELETE'
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    return (await response.json()).active === true;
+  },
+
+  subscribeToPublicExperienceTelemetry(id, teacherCode, handlers) {
+    let socket;
+    let retryTimer;
+    let stopped = false;
+
+    const connect = () => {
+      const origin = new URL(getApiOrigin() || window.location.origin, window.location.origin);
+      origin.protocol = origin.protocol === 'https:' ? 'wss:' : 'ws:';
+      origin.pathname = `/api/ws/experiences/${encodeURIComponent(id)}/telemetry`;
+      origin.search = new URLSearchParams({ teacherCode });
+      socket = new WebSocket(origin);
+      socket.onopen = () => handlers.onOpen?.();
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'error') handlers.onError?.(message.error);
+        if (message.type === 'telemetry') handlers.onTelemetry?.(message);
+      };
+      socket.onerror = () => handlers.onError?.('Connessione real-time non disponibile.');
+      socket.onclose = () => {
+        handlers.onError?.('Connessione real-time interrotta. Avvia o riavvia il backend.');
+        if (!stopped) retryTimer = window.setTimeout(connect, 2000);
+      };
+    };
+
+    connect();
+    return () => {
+      stopped = true;
+      window.clearTimeout(retryTimer);
+      socket?.close();
     };
   }
 };

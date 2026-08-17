@@ -1,6 +1,5 @@
 import { buildConfigJson } from "./writeJson.js";
-import { ConfigInformationEnd } from "./ConfigInformationEnd.js";
-import { ConfigInfortationStart } from "./ConfigInformationStart.js";
+import { ConfigInformation } from "./ConfigInformation.js";
 import { ConfigInformationPoint } from "./ConfigInformationPoint.js";
 
 
@@ -8,8 +7,22 @@ export class createConfigurationSet {
     constructor(viewer){
         this.viewer = viewer;
         this.root = document.querySelector("#imperative-control-root") || document.querySelector("#control .control-inner") || document.querySelector("#control");
-        this.informationStart = new ConfigInfortationStart(this.root);
-        this.informationEnd = new ConfigInformationEnd(this.root);
+        this.informationStart = new ConfigInformation(this.root, {
+            type: "information",
+            title: "Testo iniziale",
+            id: "descrizione",
+            placeholder: "Scrivi qui il testo iniziale...",
+            savedMessage: "Testo introduttivo salvato",
+            loadedMessage: "Testo introduttivo caricato"
+        });
+        this.informationEnd = new ConfigInformation(this.root, {
+            type: "finalInformation",
+            title: "Testo conclusivo",
+            id: "descrizioneFinale",
+            placeholder: "Scrivi qui il testo finale...",
+            savedMessage: "Testo finale salvato",
+            loadedMessage: "Testo finale caricato"
+        });
         this.infoPoint = new ConfigInformationPoint(this.viewer.core, this.root);
     }
     
@@ -72,4 +85,3 @@ export class createConfigurationSet {
     
 
 }
-

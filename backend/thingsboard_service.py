@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
+import time
 from typing import Any
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
-
 
 def load_local_env() -> None:
     """Load backend/.env without overriding environment variables set by the host."""
@@ -36,6 +37,7 @@ class ThingsBoardService:
         self.base_url = os.getenv("THINGSBOARD_BASE_URL", "https://eu.thingsboard.cloud").rstrip("/")
         self.api_key = os.getenv("THINGSBOARD_API_KEY", "")
         self.timeout = float(os.getenv("THINGSBOARD_TIMEOUT_SECONDS", "10"))
+        self.realtime_poll_seconds = max(float(os.getenv("THINGSBOARD_REALTIME_POLL_SECONDS", "1")), 0.25)
 
     def list_devices(self) -> list[dict[str, str]]:
         devices: list[dict[str, str]] = []
@@ -133,24 +135,101 @@ class ThingsBoardService:
 
         return False
 
-    def _request_json(self, path: str) -> Any:
-        if not self.api_key:
+    def stream_telemetry(self, device_id: str):
+        telemetry = self.get_latest_telemetry(device_id)
+        revision = _telemetry_revision(telemetry)
+        # ponytail: polling per viewer; condividere un poller per device solo se il traffico cresce.
+        while True:
+            time.sleep(self.realtime_poll_seconds)
+            telemetry = self.get_latest_telemetry(device_id)
+            next_revision = _telemetry_revision(telemetry)
+            if next_revision != revision:
+                revision = next_revision
+                yield telemetry
+
+    def publish_device_telemetry(self, device_id: str, values: dict[str, Any]) -> None:
+        credentials = self._request_json(f"/api/device/{quote(device_id, safe='')}/credentials")
+        if not isinstance(credentials, dict) or credentials.get("credentialsType") != "ACCESS_TOKEN":
+            raise ThingsBoardError("Il simulatore richiede credenziali ACCESS_TOKEN sul device")
+        token = credentials.get("credentialsId")
+        if not isinstance(token, str) or not token:
+            raise ThingsBoardError("Token del device ThingsBoard non disponibile")
+        self._request_json(
+            f"/api/v1/{quote(token, safe='')}/telemetry",
+            method="POST",
+            body=values,
+            authenticated=False,
+        )
+
+    def simulated_values(self, device_id: str) -> dict[str, Any]:
+        current = self.get_latest_telemetry(device_id)
+        values = {
+            key: _simulated_value(point.get("value"))
+            for key, point in current.items()
+            if point.get("value") is not None
+        }
+        return values or {"temperature": 20.0}
+
+    def _request_json(
+        self,
+        path: str,
+        method: str = "GET",
+        body: dict[str, Any] | None = None,
+        authenticated: bool = True,
+    ) -> Any:
+        if authenticated and not self.api_key:
             raise ThingsBoardError("THINGSBOARD_API_KEY non configurata")
 
+        headers = {"Accept": "application/json"}
+        if authenticated:
+            headers["X-Authorization"] = f"ApiKey {self.api_key}"
+        data = None
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            data = json.dumps(body).encode("utf-8")
         request = Request(
             f"{self.base_url}{path}",
-            headers={
-                "Accept": "application/json",
-                "X-Authorization": f"ApiKey {self.api_key}",
-            },
-            method="GET",
+            headers=headers,
+            data=data,
+            method=method,
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
+                raw = response.read()
+                result = json.loads(raw.decode("utf-8")) if raw else None
         except HTTPError as error:
             raise ThingsBoardError(f"ThingsBoard ha risposto con errore {error.code}") from error
         except (URLError, TimeoutError, json.JSONDecodeError) as error:
             raise ThingsBoardError("Impossibile comunicare con ThingsBoard") from error
 
         return result
+def _is_number(value: Any) -> bool:
+    try:
+        float(value)
+        return not isinstance(value, bool)
+    except (TypeError, ValueError):
+        return False
+
+
+def _simulated_value(value: Any) -> Any:
+    if isinstance(value, bool):
+        return not value
+    if _is_number(value):
+        number = float(value)
+        delta = max(abs(number) * 0.02, 0.2)
+        return round(number + random.uniform(-delta, delta), 2)
+
+    text = str(value)
+    normalized = text.lower()
+    if normalized in {"true", "false"}:
+        return normalized != "true"
+    if normalized in {"active", "inactive"}:
+        return "inactive" if normalized == "active" else "active"
+    suffix = " (simulato)"
+    return text.removesuffix(suffix) if text.endswith(suffix) else f"{text}{suffix}"
+
+
+def _telemetry_revision(telemetry: dict[str, dict[str, Any]]) -> tuple:
+    return tuple(
+        sorted((key, point.get("ts"), repr(point.get("value"))) for key, point in telemetry.items())
+    )

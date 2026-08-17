@@ -21,6 +21,7 @@ export function ViewerPage() {
   const uploadIdRef = useRef(viewerSession.getId());
   const [payload, setPayload] = useState(null);
   const [telemetry, setTelemetry] = useState({ loading: false, values: {}, deviceName: '', deviceConnected: false, error: '' });
+  const [simulation, setSimulation] = useState({ active: false, loading: false, error: '' });
 
   const publicExperienceId = searchParams.get('experienceId') || '';
   const returnTeacherCode = searchParams.get('teacherCode') || '';
@@ -101,35 +102,47 @@ export function ViewerPage() {
 
   useEffect(() => {
     if (!publicExperienceId) return undefined;
-    let cancelled = false;
-
-    const refreshTelemetry = async () => {
-      try {
-        const data = await experienceService.getPublicExperienceDeviceData(publicExperienceId);
-        if (!cancelled) setTelemetry({
-          loading: false,
-          values: data.telemetry,
-          deviceName: data.deviceName,
-          deviceConnected: data.deviceConnected,
-          error: ''
-        });
-      } catch (err) {
-        if (!cancelled) setTelemetry((current) => ({
-          ...current,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Impossibile caricare i dati del device.'
-        }));
-      }
-    };
-
     setTelemetry({ loading: true, values: {}, deviceName: '', deviceConnected: false, error: '' });
-    void refreshTelemetry();
-    const timer = window.setInterval(() => void refreshTelemetry(), 3000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [publicExperienceId]);
+    return experienceService.subscribeToPublicExperienceTelemetry(publicExperienceId, returnTeacherCode, {
+      onOpen: () => setTelemetry((current) => ({ ...current, error: '' })),
+      onError: (error) => setTelemetry((current) => ({ ...current, loading: false, error })),
+      onTelemetry: (message) => setTelemetry((current) => {
+        const values = { ...current.values, ...message.telemetry };
+        window.dispatchEvent(new CustomEvent('experience:telemetry', { detail: values }));
+        return {
+          loading: false,
+          values,
+          deviceName: message.deviceName ?? current.deviceName,
+          deviceConnected: message.deviceConnected ?? current.deviceConnected,
+          error: ''
+        };
+      })
+    });
+  }, [publicExperienceId, returnTeacherCode]);
+
+  useEffect(() => {
+    if (!publicExperienceId) return undefined;
+    let cancelled = false;
+    experienceService.getPublicExperienceSimulation(publicExperienceId, returnTeacherCode)
+      .then((active) => !cancelled && setSimulation({ active, loading: false, error: '' }))
+      .catch((error) => !cancelled && setSimulation({ active: false, loading: false, error: error.message }));
+    return () => { cancelled = true; };
+  }, [publicExperienceId, returnTeacherCode]);
+
+  async function toggleSimulation() {
+    if (simulation.loading) return;
+    setSimulation((current) => ({ ...current, loading: true, error: '' }));
+    try {
+      const active = await experienceService.setPublicExperienceSimulation(
+        publicExperienceId,
+        returnTeacherCode,
+        !simulation.active
+      );
+      setSimulation({ active, loading: false, error: '' });
+    } catch (error) {
+      setSimulation((current) => ({ ...current, loading: false, error: error.message }));
+    }
+  }
 
   useEffect(() => {
     if (!payload || !canvasRef.current || !hostRef.current || viewerRef.current) return;
@@ -147,7 +160,7 @@ export function ViewerPage() {
         await uploadViewe(payload.glb, viewer, payload.json);
         const deviceId = viewerSession.getDeviceId();
         const telemetryProvider = payload.isPublic
-          ? () => experienceService.getPublicExperienceTelemetry(publicExperienceId)
+          ? () => experienceService.getPublicExperienceTelemetry(publicExperienceId, returnTeacherCode)
           : (deviceId ? () => experienceService.getIotDeviceTelemetry(deviceId) : null);
         await load(viewer, { telemetryProvider });
 
@@ -172,7 +185,7 @@ export function ViewerPage() {
     return () => {
       disposed = true;
     };
-  }, [payload]);
+  }, [payload, publicExperienceId, returnTeacherCode]);
 
   useEffect(() => {
     return () => {
@@ -197,6 +210,20 @@ export function ViewerPage() {
           {payload?.isPublic && telemetry.deviceConnected && (
             <section className="ctrl-section device-telemetry-section" aria-live="polite">
               <div className="ctrl-title">Dati del device collegato</div>
+              <div className="form-check form-switch telemetry-label-toggle mb-3">
+                <input
+                  id="student-simulation-toggle"
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={simulation.active}
+                  disabled={simulation.loading}
+                  onChange={() => void toggleSimulation()}
+                />
+                <label className="form-check-label" htmlFor="student-simulation-toggle">
+                  Simulatore test (15 s)
+                </label>
+              </div>
+              {simulation.error && <p className="device-telemetry-message device-telemetry-error">{simulation.error}</p>}
               {telemetry.loading ? (
                 <p className="device-telemetry-message mb-0">Caricamento dati...</p>
               ) : telemetry.error ? (

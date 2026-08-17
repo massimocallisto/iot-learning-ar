@@ -488,6 +488,10 @@ POST   /api/auth/register
 POST   /api/auth/login
 GET    /api/auth/me
 GET    /api/iot/devices
+GET    /api/iot/devices/:id/simulation
+POST   /api/iot/devices/:id/simulation
+DELETE /api/iot/devices/:id/simulation
+WS     /api/ws/experiences/:id/telemetry?teacherCode=:code
 GET    /api/experiences
 POST   /api/experiences
 GET    /api/experiences/:id
@@ -519,6 +523,7 @@ variabili d'ambiente prima di avviare il backend:
 THINGSBOARD_BASE_URL=https://eu.thingsboard.cloud
 THINGSBOARD_API_KEY=<api-key ThingsBoard>
 THINGSBOARD_TIMEOUT_SECONDS=10
+THINGSBOARD_REALTIME_POLL_SECONDS=1
 ```
 
 Puoi copiare `backend/.env.example` in `backend/.env`: il backend lo carica
@@ -532,6 +537,24 @@ python backend/app.py
 
 `GET /api/iot/devices` esegue `GET /api/tenant/devices?pageSize=100&page=0` con
 `X-Authorization: ApiKey <THINGSBOARD_API_KEY>` e restituisce per ciascun device solo `id`, `name` e `type`.
+
+L'API key serve tutte le comunicazioni con ThingsBoard, incluso il controllo degli
+aggiornamenti ogni secondo. Solo il backend esegue questo controllo: il frontend riceve
+gli aggiornamenti tramite WebSocket e non effettua polling. Puoi aumentare
+`THINGSBOARD_REALTIME_POLL_SECONDS` per ridurre il numero di richieste REST.
+
+### Test real-time end-to-end
+
+1. Avvia backend e frontend, accedi come docente e collega un device a un'esperienza.
+2. Nel configuratore premi **Avvia simulazione**: il backend pubblica subito e poi ogni 10 secondi tramite l'HTTP Device API di ThingsBoard.
+3. Apri l'esperienza come studente con il codice docente. UI e label `{{telemetryKey}}` si aggiornano tramite WebSocket senza polling.
+4. Torna nel configuratore e premi **Ferma simulazione**.
+
+Check automatico del parsing dei messaggi ThingsBoard:
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m unittest backend/test_realtime.py
+```
 
 The SQLite database is stored in:
 
