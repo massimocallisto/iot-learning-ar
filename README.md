@@ -2,7 +2,7 @@
 
 A web-based prototype for creating, configuring, and viewing interactive 3D learning experiences.
 
-The application allows a teacher to upload a 3D model, configure Points of Interest on model parts, and publish the experience so that students can access it through a browser. The viewer is designed to support standard 3D visualization and can be extended toward WebXR, AR/VR, and real-time IoT data integration.
+The application allows a teacher to upload a 3D model, configure Points of Interest on model parts, link an optional ThingsBoard device, and publish the experience so that students can access it through a browser. The viewer supports standard 3D visualization, WebXR AR, and real-time IoT data integration.
 
 ## Project overview
 
@@ -17,8 +17,9 @@ Main user flows:
 - Teacher dashboard for managing experiences.
 - 3D model upload.
 - Point of Interest configuration.
+- Optional ThingsBoard device and telemetry configuration.
 - Student access through teacher code.
-- 3D experience visualization.
+- 3D/AR experience visualization with real-time telemetry.
 
 ## Requirements
 
@@ -38,7 +39,7 @@ Clone the repository:
 
 ```bash
 git clone <repository-url>
-cd configuratore_tesi
+cd iot-learning-ar
 ```
 
 Install project dependencies:
@@ -62,6 +63,8 @@ The expected certificate files are:
 ```text
 ssl/localhost+2.pem
 ssl/localhost+2-key.pem
+backend/ssl/localhost+2.pem
+backend/ssl/localhost+2-key.pem
 ```
 
 ### 1. Install mkcert
@@ -119,6 +122,8 @@ From the project root:
 
 ```bash
 mkcert -cert-file ssl/localhost+2.pem -key-file ssl/localhost+2-key.pem localhost 127.0.0.1 ::1
+mkdir -p backend/ssl
+mkcert -cert-file backend/ssl/localhost+2.pem -key-file backend/ssl/localhost+2-key.pem localhost 127.0.0.1 ::1
 ```
 
 This generates certificates valid for:
@@ -134,7 +139,7 @@ localhost
 Open two terminal windows in the project root.
 
 ```bash
-cd configuratore_tesi
+cd iot-learning-ar
 ```
 
 ### 1. Start the backend over HTTPS
@@ -217,6 +222,7 @@ If your local IP is `192.168.1.50`, regenerate the certificates as follows:
 
 ```bash
 mkcert -cert-file ssl/localhost+2.pem -key-file ssl/localhost+2-key.pem localhost 127.0.0.1 ::1 192.168.1.50
+mkcert -cert-file backend/ssl/localhost+2.pem -key-file backend/ssl/localhost+2-key.pem localhost 127.0.0.1 ::1 192.168.1.50
 ```
 
 Then restart both backend and frontend.
@@ -307,6 +313,8 @@ The backend exposes API endpoints for:
 - Experience listing.
 - GLB model upload.
 - JSON configuration upload.
+- ThingsBoard device and telemetry integration.
+- Real-time telemetry delivery through WebSocket.
 - Public student access.
 - Public model and configuration retrieval.
 
@@ -314,8 +322,12 @@ Main endpoint groups:
 
 ```text
 /api/auth/*
+/api/iot/*
 /api/experiences/*
 /api/public/*
+/api/uploads/*
+/api/ws/*
+/api/textures
 ```
 
 Health check:
@@ -341,11 +353,11 @@ GET /api/health
 2. Enter the teacher code.
 3. Select an available experience.
 4. Open the 3D viewer.
-5. Explore the model and interact with the configured Points of Interest.
+5. Explore the model, view device telemetry, and interact with the configured Points of Interest.
 
 ## WebXR notes
 
-The application can be extended to support WebXR-based AR or VR experiences.
+The application supports WebXR-based AR experiences.
 
 Important notes:
 
@@ -353,9 +365,7 @@ Important notes:
 - AR support depends on the browser and device.
 - Desktop browsers generally do not support immersive AR.
 - Android devices require Chrome and ARCore support for WebXR AR.
-- VR headsets require a browser/runtime that supports WebXR immersive VR.
-
-For VR support, the viewer should use a WebXR VR entry point such as Three.js `VRButton`.
+- VR support is not currently implemented.
 
 For AR support, the viewer should use a WebXR AR entry point such as Three.js `ARButton`.
 
@@ -410,7 +420,7 @@ This is expected on many desktop browsers and laptops.
 
 For AR testing, use a compatible Android device with Chrome and ARCore support.
 
-For VR testing, use a compatible WebXR headset and make sure the viewer includes VR support.
+VR testing is not supported by the current viewer.
 
 ## Production notes
 
@@ -430,53 +440,11 @@ Before production deployment, the following aspects should be reviewed:
 
 ## License
 
-Add the project license here.
+See [LICENSE](LICENSE).
 
-
-
-
-# Python backend
+## Backend reference
 
 The Flask backend preserves the SQLite schema and HTTP API used by the frontend.
-
-## Install
-
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-On Windows PowerShell:
-
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-## Run in HTTPS mode
-
-Generate certificates in the project root, for example:
-
-```bash
-mkdir -p ssl
-mkcert -cert-file ssl/localhost+2.pem -key-file ssl/localhost+2-key.pem localhost 127.0.0.1 ::1
-```
-
-Then run:
-
-```bash
-python app.py
-```
-
-The backend starts on:
-
-```text
-https://localhost:3001
-```
 
 ## API compatibility
 
@@ -488,6 +456,10 @@ POST   /api/auth/register
 POST   /api/auth/login
 GET    /api/auth/me
 GET    /api/iot/devices
+GET    /api/iot/devices/:id/latest-telemetry
+GET    /api/iot/devices/:id/telemetry-catalog
+GET    /api/iot/devices/:id/telemetry
+GET    /api/iot/devices/:id/status
 GET    /api/iot/devices/:id/simulation
 POST   /api/iot/devices/:id/simulation
 DELETE /api/iot/devices/:id/simulation
@@ -502,6 +474,10 @@ DELETE /api/experiences/:id
 GET    /api/public/teachers/:code/experiences
 GET    /api/public/experiences/:id/glb
 GET    /api/public/experiences/:id/json
+GET    /api/public/experiences/:id/telemetry
+GET    /api/public/experiences/:id/simulation
+POST   /api/public/experiences/:id/simulation
+DELETE /api/public/experiences/:id/simulation
 POST   /api/uploads
 POST   /api/upload
 GET    /api/uploads/:id
@@ -516,45 +492,41 @@ GET    /textures/:file
 
 ### ThingsBoard
 
-Il backend autentica il proprio client REST con una API key ThingsBoard. Imposta le
-variabili d'ambiente prima di avviare il backend:
+The backend authenticates its REST client with a ThingsBoard API key. Set the
+environment variables before starting the backend:
 
 ```text
-THINGSBOARD_BASE_URL=https://eu.thingsboard.cloud
 THINGSBOARD_API_KEY=<api-key ThingsBoard>
-THINGSBOARD_TIMEOUT_SECONDS=10
-THINGSBOARD_REALTIME_POLL_SECONDS=1
 ```
 
-Puoi copiare `backend/.env.example` in `backend/.env`: il backend lo carica
-automaticamente senza sovrascrivere eventuali variabili d'ambiente del sistema.
-In alternativa, puoi impostarle in PowerShell:
+`THINGSBOARD_BASE_URL` defaults to `https://eu.thingsboard.cloud` and
+`THINGSBOARD_TIMEOUT_SECONDS` defaults to `10`, so both can be omitted when
+using the default ThingsBoard instance. Set `THINGSBOARD_REALTIME_POLL_SECONDS`
+only if you want to override the default one-second polling interval.
+
+Create `backend/.env`; the backend loads it automatically without overriding
+environment variables already set by the system. Alternatively, set them in PowerShell:
 
 ```powershell
 $env:THINGSBOARD_API_KEY = "api-key-segreta"
 python backend/app.py
 ```
 
-`GET /api/iot/devices` esegue `GET /api/tenant/devices?pageSize=100&page=0` con
-`X-Authorization: ApiKey <THINGSBOARD_API_KEY>` e restituisce per ciascun device solo `id`, `name` e `type`.
+`GET /api/iot/devices` calls `GET /api/tenant/devices?pageSize=100&page=0` with
+`X-Authorization: ApiKey <THINGSBOARD_API_KEY>` and returns only `id`, `name`, and `type` for each device.
 
-L'API key serve tutte le comunicazioni con ThingsBoard, incluso il controllo degli
-aggiornamenti ogni secondo. Solo il backend esegue questo controllo: il frontend riceve
-gli aggiornamenti tramite WebSocket e non effettua polling. Puoi aumentare
-`THINGSBOARD_REALTIME_POLL_SECONDS` per ridurre il numero di richieste REST.
+The API key is used for all communication with ThingsBoard, including checking for
+updates at the configured polling interval (one second by default). Only the
+backend performs this check: the frontend receives
+updates through WebSocket and does not poll. Increase
+`THINGSBOARD_REALTIME_POLL_SECONDS` to reduce the number of REST requests.
 
-### Test real-time end-to-end
+### End-to-end real-time test
 
-1. Avvia backend e frontend, accedi come docente e collega un device a un'esperienza.
-2. Nel configuratore premi **Avvia simulazione**: il backend pubblica subito e poi ogni 10 secondi tramite l'HTTP Device API di ThingsBoard.
-3. Apri l'esperienza come studente con il codice docente. UI e label `{{telemetryKey}}` si aggiornano tramite WebSocket senza polling.
-4. Torna nel configuratore e premi **Ferma simulazione**.
-
-Check automatico del parsing dei messaggi ThingsBoard:
-
-```powershell
-.\backend\.venv\Scripts\python.exe -m unittest backend/test_realtime.py
-```
+1. Start the backend and frontend, sign in as a teacher, and link a device to an experience.
+2. In the configurator, click **Start simulation**: the backend publishes immediately and then every 15 seconds through the ThingsBoard HTTP Device API.
+3. Open the experience as a student using the teacher code. The UI and `{{telemetryKey}}` labels update through WebSocket without frontend polling.
+4. Return to the configurator and click **Stop simulation**.
 
 The SQLite database is stored in:
 

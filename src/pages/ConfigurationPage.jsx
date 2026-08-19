@@ -142,6 +142,30 @@ export function ConfigurationPage() {
     }
 
     let cancelled = false;
+    let telemetryPollId;
+    const refreshTelemetry = async () => {
+      try {
+        const [values, timestamp, active] = await Promise.all([
+          experienceService.getIotDeviceTelemetry(selectedDeviceId),
+          experienceService.getIotDeviceLatestTelemetry(selectedDeviceId),
+          experienceService.getIotDeviceStatus(selectedDeviceId).catch(() => false)
+        ]);
+        if (cancelled) return;
+        telemetryValuesRef.current = values;
+        setLastTelemetryTs(timestamp);
+        setIsDeviceActive(active);
+        window.dispatchEvent(new CustomEvent('experience:telemetry-catalog', {
+          detail: {
+            keys: telemetryCatalogRef.current,
+            values,
+            deviceConnected: true,
+            loading: false
+          }
+        }));
+      } catch {
+        // Keep the last preview value visible if a periodic refresh fails.
+      }
+    };
     void loadIotDevices();
     setIsTelemetryLoading(true);
     setTelemetryError('');
@@ -184,10 +208,17 @@ export function ConfigurationPage() {
         }
       })
       .finally(() => {
-        if (!cancelled) setIsTelemetryLoading(false);
+        if (!cancelled) {
+          setIsTelemetryLoading(false);
+          // ponytail: one active configurator polls once per second; share a stream only if concurrent editors matter.
+          telemetryPollId = window.setInterval(() => void refreshTelemetry(), 1000);
+        }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.clearInterval(telemetryPollId);
+    };
   }, [loadIotDevices, selectedDeviceId]);
 
   function changeDevice(deviceId) {
