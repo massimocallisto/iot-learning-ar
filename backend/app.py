@@ -45,7 +45,6 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
 CORS(app, resources={r"/*": {"origins": CORS_ORIGIN}}, supports_credentials=False)
 sock = Sock(app)
 thingsboard_service = ThingsBoardService()
-device_name_cache: dict[str, str] = {}
 simulators: dict[str, threading.Event] = {}
 simulators_lock = threading.Lock()
 
@@ -345,14 +344,25 @@ def public_experience_telemetry_ws(ws, experience_id: str) -> None:
 
     device_id = row["device_id"]
     try:
+        device = get_device_details(device_id)
         ws.send(json.dumps({
             "type": "telemetry",
             "telemetry": thingsboard_service.get_latest_telemetry(device_id),
-            "deviceName": get_device_name(device_id),
+            "deviceName": device.get("name", ""),
+            "deviceDescription": device.get("description", ""),
+            "deviceActive": thingsboard_service.get_device_active_status(device_id),
             "deviceConnected": True,
         }))
         for telemetry in thingsboard_service.stream_telemetry(device_id):
-            ws.send(json.dumps({"type": "telemetry", "telemetry": telemetry}))
+            device = get_device_details(device_id)
+            ws.send(json.dumps({
+                "type": "telemetry",
+                "telemetry": telemetry,
+                "deviceName": device.get("name", ""),
+                "deviceDescription": device.get("description", ""),
+                "deviceActive": thingsboard_service.get_device_active_status(device_id),
+                "deviceConnected": True,
+            }))
     except Exception as error:
         app.logger.warning("[realtime] %s", error)
 
@@ -510,9 +520,12 @@ def public_experience_telemetry(experience_id: str) -> tuple[Response, int] | Re
 
     try:
         device_id = row["device_id"]
+        device = get_device_details(device_id)
         return jsonify({
             "telemetry": thingsboard_service.get_latest_telemetry(device_id),
-            "deviceName": get_device_name(device_id),
+            "deviceName": device.get("name", ""),
+            "deviceDescription": device.get("description", ""),
+            "deviceActive": thingsboard_service.get_device_active_status(device_id),
             "deviceConnected": True,
         })
     except ThingsBoardError as error:
@@ -747,13 +760,9 @@ def load_public_experience_for_code(experience_id: str, access_code: Any):
     )
 
 
-def get_device_name(device_id: str) -> str:
-    name = device_name_cache.get(device_id, "")
-    if not name:
-        devices = thingsboard_service.list_devices()
-        device_name_cache.update({device["id"]: device["name"] for device in devices})
-        name = device_name_cache.get(device_id, "")
-    return name
+def get_device_details(device_id: str) -> dict[str, str]:
+    # ponytail: ricarica la lista a ogni poll per aggiornare i metadati; usare l'endpoint singolo se i device crescono.
+    return next((item for item in thingsboard_service.list_devices() if item["id"] == device_id), {})
 
 
 def simulation_is_active(device_id: str) -> bool:

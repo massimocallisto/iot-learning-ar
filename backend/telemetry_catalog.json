@@ -1,0 +1,11 @@
+{
+  "battery": { "icon": "🔋", "unit": "%", "min": 0, "max": 100 },
+  "distance": { "icon": "↔️", "unit": "cm", "min": 0, "max": 400 },
+  "speed": { "icon": "💨", "unit": "m/s", "min": 0, "max": 10 },
+  "motion": { "icon": "🚶", "unit": "" },
+  "gripper": { "icon": "🦾", "unit": "" },
+  "status": { "icon": "●", "unit": "" },
+  "temperature": { "icon": "🌡️", "unit": "°C", "min": -20, "max": 60 },
+  "humidity": { "icon": "💧", "unit": "%", "min": 0, "max": 100 },
+  "pressure": { "icon": "⏱️", "unit": "hPa", "min": 900, "max": 1100 }
+}

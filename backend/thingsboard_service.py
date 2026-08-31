@@ -27,6 +27,9 @@ def load_local_env() -> None:
 
 load_local_env()
 
+with (Path(__file__).resolve().parent / "telemetry_catalog.json").open(encoding="utf-8") as catalog_file:
+    TELEMETRY_CATALOG = json.load(catalog_file)
+
 
 class ThingsBoardError(RuntimeError):
     """Raised when ThingsBoard cannot be reached or returns an invalid response."""
@@ -57,7 +60,14 @@ class ThingsBoardService:
                 name = device.get("name") if isinstance(device, dict) else None
                 device_type = device.get("type") if isinstance(device, dict) else None
                 if isinstance(device_id, str) and isinstance(name, str) and isinstance(device_type, str):
-                    devices.append({"id": device_id, "name": name, "type": device_type})
+                    additional_info = device.get("additionalInfo")
+                    description = additional_info.get("description") if isinstance(additional_info, dict) else ""
+                    devices.append({
+                        "id": device_id,
+                        "name": name,
+                        "type": device_type,
+                        "description": description if isinstance(description, str) else "",
+                    })
 
             if not payload.get("hasNext"):
                 return devices
@@ -113,6 +123,7 @@ class ThingsBoardService:
             result[key] = {
                 "value": point["value"],
                 "ts": point.get("ts") if isinstance(point.get("ts"), int) else None,
+                **TELEMETRY_CATALOG.get(key.casefold(), {}),
             }
 
         return result
@@ -136,16 +147,10 @@ class ThingsBoardService:
         return False
 
     def stream_telemetry(self, device_id: str):
-        telemetry = self.get_latest_telemetry(device_id)
-        revision = _telemetry_revision(telemetry)
         # ponytail: polling per viewer; condividere un poller per device solo se il traffico cresce.
         while True:
             time.sleep(self.realtime_poll_seconds)
-            telemetry = self.get_latest_telemetry(device_id)
-            next_revision = _telemetry_revision(telemetry)
-            if next_revision != revision:
-                revision = next_revision
-                yield telemetry
+            yield self.get_latest_telemetry(device_id)
 
     def publish_device_telemetry(self, device_id: str, values: dict[str, Any]) -> None:
         credentials = self._request_json(f"/api/device/{quote(device_id, safe='')}/credentials")
@@ -164,7 +169,7 @@ class ThingsBoardService:
     def simulated_values(self, device_id: str) -> dict[str, Any]:
         current = self.get_latest_telemetry(device_id)
         values = {
-            key: _simulated_value(point.get("value"))
+            key: _simulated_value(point.get("value"), TELEMETRY_CATALOG.get(key.casefold(), {}))
             for key, point in current.items()
             if point.get("value") is not None
         }
@@ -211,13 +216,16 @@ def _is_number(value: Any) -> bool:
         return False
 
 
-def _simulated_value(value: Any) -> Any:
+def _simulated_value(value: Any, metadata: dict[str, Any] | None = None) -> Any:
     if isinstance(value, bool):
         return not value
     if _is_number(value):
         number = float(value)
         delta = max(abs(number) * 0.02, 0.2)
-        return round(number + random.uniform(-delta, delta), 2)
+        simulated = number + random.uniform(-delta, delta)
+        if metadata and _is_number(metadata.get("min")) and _is_number(metadata.get("max")):
+            simulated = min(max(simulated, float(metadata["min"])), float(metadata["max"]))
+        return round(simulated, 2)
 
     text = str(value)
     normalized = text.lower()
@@ -227,9 +235,3 @@ def _simulated_value(value: Any) -> Any:
         return "inactive" if normalized == "active" else "active"
     suffix = " (simulato)"
     return text.removesuffix(suffix) if text.endswith(suffix) else f"{text}{suffix}"
-
-
-def _telemetry_revision(telemetry: dict[str, dict[str, Any]]) -> tuple:
-    return tuple(
-        sorted((key, point.get("ts"), repr(point.get("value"))) for key, point in telemetry.items())
-    )

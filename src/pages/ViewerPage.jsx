@@ -8,8 +8,8 @@ import { viewerSession } from '../services/viewerSession.js';
 function formatTelemetryValue(point) {
   const value = point?.value;
   if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
+  const formatted = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return point?.unit ? `${formatted} ${point.unit}` : formatted;
 }
 
 export function ViewerPage() {
@@ -20,7 +20,7 @@ export function ViewerPage() {
   const viewerRef = useRef(null);
   const uploadIdRef = useRef(viewerSession.getId());
   const [payload, setPayload] = useState(null);
-  const [telemetry, setTelemetry] = useState({ loading: false, values: {}, deviceName: '', deviceConnected: false, error: '' });
+  const [telemetry, setTelemetry] = useState({ loading: false, values: {}, deviceName: '', deviceDescription: '', deviceActive: false, deviceConnected: false, error: '' });
   const [simulation, setSimulation] = useState({ active: false, loading: false, error: '' });
 
   const publicExperienceId = searchParams.get('experienceId') || '';
@@ -102,7 +102,7 @@ export function ViewerPage() {
 
   useEffect(() => {
     if (!publicExperienceId) return undefined;
-    setTelemetry({ loading: true, values: {}, deviceName: '', deviceConnected: false, error: '' });
+    setTelemetry({ loading: true, values: {}, deviceName: '', deviceDescription: '', deviceActive: false, deviceConnected: false, error: '' });
     return experienceService.subscribeToPublicExperienceTelemetry(publicExperienceId, returnTeacherCode, {
       onOpen: () => setTelemetry((current) => ({ ...current, error: '' })),
       onError: (error) => setTelemetry((current) => ({ ...current, loading: false, error })),
@@ -113,6 +113,8 @@ export function ViewerPage() {
           loading: false,
           values,
           deviceName: message.deviceName ?? current.deviceName,
+          deviceDescription: message.deviceDescription ?? current.deviceDescription,
+          deviceActive: message.deviceActive ?? current.deviceActive,
           deviceConnected: message.deviceConnected ?? current.deviceConnected,
           error: ''
         };
@@ -208,45 +210,52 @@ export function ViewerPage() {
           </div>
 
           {payload?.isPublic && telemetry.deviceConnected && (
-            <section className="ctrl-section device-telemetry-section" aria-live="polite">
-              <div className="ctrl-title">Dati del device collegato</div>
-              <div className="form-check form-switch telemetry-label-toggle mb-3">
-                <input
-                  id="student-simulation-toggle"
-                  className="form-check-input"
-                  type="checkbox"
-                  checked={simulation.active}
-                  disabled={simulation.loading}
-                  onChange={() => void toggleSimulation()}
-                />
-                <label className="form-check-label" htmlFor="student-simulation-toggle">
-                  Simulatore test (15 s)
-                </label>
-              </div>
-              {simulation.error && <p className="device-telemetry-message device-telemetry-error">{simulation.error}</p>}
-              {telemetry.loading ? (
-                <p className="device-telemetry-message mb-0">Caricamento dati...</p>
-              ) : telemetry.error ? (
-                <p className="device-telemetry-message device-telemetry-error mb-0">{telemetry.error}</p>
-              ) : Object.keys(telemetry.values).length || telemetry.deviceName ? (
-                <dl className="device-telemetry-list mb-0">
-                  <div className="device-telemetry-item">
-                    <dt>Nome</dt>
-                    <dd>{telemetry.deviceName || '—'}</dd>
+            <details className="ctrl-section device-telemetry-section">
+              <summary className="ctrl-title device-telemetry-summary">
+                <span>{telemetry.deviceName || 'Device collegato'}</span>
+                <span className={`badge ${telemetry.deviceActive ? 'bg-success' : 'bg-danger'}`}>
+                  {telemetry.deviceActive ? 'Attivo' : 'Inattivo'}
+                </span>
+              </summary>
+              <div className="device-telemetry-content" aria-live="polite">
+                <div className="form-check form-switch telemetry-label-toggle mb-3">
+                  <input
+                    id="student-simulation-toggle"
+                    className="form-check-input"
+                    type="checkbox"
+                    checked={simulation.active}
+                    disabled={simulation.loading}
+                    onChange={() => void toggleSimulation()}
+                  />
+                  <label className="form-check-label" htmlFor="student-simulation-toggle">
+                    Simulatore test (15 s)
+                  </label>
                   </div>
-                  {Object.entries(telemetry.values)
-                    .sort(([firstKey], [secondKey]) => firstKey.localeCompare(secondKey))
-                    .map(([key, point]) => (
-                      <div key={key} className="device-telemetry-item">
-                        <dt>{key}</dt>
-                        <dd>{formatTelemetryValue(point)}</dd>
-                      </div>
-                    ))}
-                </dl>
-              ) : (
-                <p className="device-telemetry-message mb-0">Nessun dato disponibile dal device.</p>
-              )}
-            </section>
+                {simulation.error && <p className="device-telemetry-message device-telemetry-error">{simulation.error}</p>}
+                {telemetry.loading ? (
+                  <p className="device-telemetry-message mb-0">Caricamento dati...</p>
+                ) : telemetry.error ? (
+                  <p className="device-telemetry-message device-telemetry-error mb-0">{telemetry.error}</p>
+                ) : Object.keys(telemetry.values).length || telemetry.deviceName ? (
+                  <dl className="device-telemetry-list mb-0">
+                    <div className="device-telemetry-item">
+                      <dt>Descrizione</dt>
+                      <dd>{telemetry.deviceDescription || '—'}</dd>
+                    </div>
+                    {Object.entries(telemetry.values)
+                      .sort(([firstKey], [secondKey]) => firstKey.localeCompare(secondKey))
+                      .map(([key, point]) => (
+                        <div key={key} className="device-telemetry-item">
+                          <dt>{point?.icon && <span className="telemetry-icon" aria-hidden="true">{point.icon}</span>}{key}</dt>
+                          <dd>{formatTelemetryValue(point)}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                ) : (
+                  <p className="device-telemetry-message mb-0">Nessun dato disponibile dal device.</p>
+                )}
+              </div>
+            </details>
           )}
 
           <div id="imperative-control-root" />

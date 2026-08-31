@@ -217,7 +217,7 @@ class InfoPointRuntime {
     if (!label || !key) return;
     const point = this.telemetryValues?.[key];
     const value = point?.value ?? "—";
-    label.textContent = `${key}: ${value}`;
+    label.textContent = `${point?.icon ? `${point.icon} ` : ""}${key}: ${value}${point?.unit ? ` ${point.unit}` : ""}`;
   }
 
   computeMarkerPosition({ box, modelCenter, size, radius, worldCenter }) {
@@ -620,7 +620,7 @@ function replaceTelemetryPlaceholders(description, telemetry) {
   return String(description).replace(/{{\s*([A-Za-z0-9_.:-]+)\s*}}/g, (placeholder, key) => {
     const point = telemetry?.[key];
     if (!point || point.value === undefined || point.value === null) return placeholder;
-    return String(point.value);
+    return `${point.value}${point.unit ? ` ${point.unit}` : ""}`;
   });
 }
 

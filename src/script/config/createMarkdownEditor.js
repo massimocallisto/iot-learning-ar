@@ -145,6 +145,6 @@ function replaceTelemetryPlaceholders(text, telemetry) {
   return String(text ?? "").replace(/{{\s*([A-Za-z0-9_.:-]+)\s*}}/g, (placeholder, key) => {
     const point = telemetry?.[key];
     if (!point || point.value === undefined || point.value === null) return placeholder;
-    return String(point.value);
+    return `${point.value}${point.unit ? ` ${point.unit}` : ""}`;
   });
 }

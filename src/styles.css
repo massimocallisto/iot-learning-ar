@@ -107,6 +107,24 @@ html, body {
   margin: 0 0 10px 0;
 }
 
+.device-telemetry-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.device-telemetry-summary::-webkit-details-marker {
+  display: none;
+}
+
+.device-telemetry-content {
+  margin-top: 10px;
+}
+
 .ctrl-row {
   display: flex;
   gap: 10px;
@@ -166,6 +184,13 @@ html, body {
 .device-telemetry-item dt {
   color: #6c757d;
   font-size: 0.875rem;
+}
+
+.telemetry-icon {
+  display: inline-block;
+  width: 1.5em;
+  margin-right: 4px;
+  text-align: center;
 }
 
 .device-telemetry-item dd {
