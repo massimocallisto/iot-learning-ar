@@ -31,10 +31,14 @@ class InfoPointRuntime {
     this.telemetryProvider = typeof options.telemetryProvider === "function"
       ? options.telemetryProvider
       : null;
+    this.actionProvider = typeof options.actionProvider === "function"
+      ? options.actionProvider
+      : null;
     this.telemetryValues = {};
     this.telemetryRequestPending = false;
     this.currentInfoPoint = null;
     this.labelElements = [];
+    this.actionControlUpdaters = [];
 
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -66,6 +70,7 @@ class InfoPointRuntime {
       const overlay = document.querySelector("#ar-overlay");
       overlay?.addEventListener("pointerdown", this.onAROverlayPointerDown);
       overlay?.addEventListener("pointerup", this.onAROverlayPointerUp);
+      if (overlay) overlay.append(...this.labelElements);
     });
 
     viewer.xr.addEventListener("sessionend", () => {
@@ -75,6 +80,7 @@ class InfoPointRuntime {
       const overlay = document.querySelector("#ar-overlay");
       overlay?.removeEventListener("pointerdown", this.onAROverlayPointerDown);
       overlay?.removeEventListener("pointerup", this.onAROverlayPointerUp);
+      document.body.append(...this.labelElements);
       this.arTapStart = null;
     });
 
@@ -182,8 +188,7 @@ class InfoPointRuntime {
       const withinDistance = cameraPosition.distanceTo(this.tmpWorldPosition) <= settings.activationDistance;
       const visible = this.tmpScreenPosition.z >= -1
         && this.tmpScreenPosition.z <= 1
-        && (settings.alwaysVisible || selected)
-        && (!settings.onlyWhenNear || withinDistance);
+        && (settings.onlyWhenNear ? withinDistance : settings.alwaysVisible || selected);
       if (!visible) {
         label.style.display = "none";
         continue;
@@ -501,7 +506,10 @@ class InfoPointRuntime {
       lineHeight: "1.45"
     });
 
-    panel.append(header, description);
+    const actions = document.createElement("div");
+    actions.className = "info-point-panel-actions";
+
+    panel.append(header, description, actions);
     this.root.appendChild(panel);
 
     return panel;
@@ -515,6 +523,7 @@ class InfoPointRuntime {
       info.name || parts[0] || "Information point";
 
     this.renderInfoPointDescription();
+    this.renderInfoPointActions();
 
     this.panel.style.display = "block";
     this.updateLabels();
@@ -543,6 +552,100 @@ class InfoPointRuntime {
     );
   }
 
+  renderInfoPointActions() {
+    const container = this.panel.querySelector(".info-point-panel-actions");
+    container.replaceChildren();
+    this.actionControlUpdaters = [];
+    const actions = Array.isArray(this.currentInfoPoint?.actions) ? this.currentInfoPoint.actions : [];
+    if (!actions.length || !this.actionProvider) return;
+
+    const heading = document.createElement("div");
+    heading.className = "info-point-actions-title";
+    heading.textContent = "Azioni";
+    container.appendChild(heading);
+
+    actions.forEach((action, actionIndex) => {
+      const actionType = String(action.actionType || action.kind || "BOOLEAN").toUpperCase();
+      const row = document.createElement("div");
+      row.className = "info-point-action";
+
+      const label = document.createElement("span");
+      label.className = "info-point-action-label";
+      label.textContent = action.label || action.method || "Azione";
+      const status = document.createElement("small");
+      status.className = "info-point-action-status";
+      status.setAttribute("role", "status");
+      const execute = async (value) => {
+        row.querySelectorAll("button, input, select").forEach((control) => { control.disabled = true; });
+        status.className = "info-point-action-status";
+        status.textContent = String(action.executionType || action.mode).toUpperCase() === "SYNC"
+          ? "Comando in corso..."
+          : "Invio comando...";
+        try {
+          const poiIndex = this.infoPoints.indexOf(this.currentInfoPoint);
+          const result = await this.actionProvider(poiIndex, actionIndex, value);
+          status.classList.add("text-success");
+          status.textContent = result.message || "Comando eseguito.";
+          return true;
+        } catch (error) {
+          status.classList.add("text-danger");
+          status.textContent = error.message || "Comando non riuscito.";
+          return false;
+        } finally {
+          row.querySelectorAll("button, input, select").forEach((control) => { control.disabled = false; });
+        }
+      };
+
+      if (actionType === "BOOLEAN") {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn-primary";
+        let localValue = false;
+        const readValue = () => action.controlTelemetry
+          ? telemetryBoolean(this.telemetryValues?.[action.controlTelemetry]?.value)
+          : localValue;
+        const update = () => {
+          const active = readValue();
+          button.textContent = active ? "Spegni" : "Accendi";
+          button.setAttribute("aria-pressed", String(active));
+        };
+        button.addEventListener("click", async () => {
+          const value = !readValue();
+          if (await execute(value)) localValue = value;
+          update();
+        });
+        this.actionControlUpdaters.push(update);
+        row.append(label, button, status);
+      } else {
+        const controls = document.createElement("div");
+        controls.className = "input-group input-group-sm";
+        const input = document.createElement("input");
+        input.className = "form-control info-point-action-control";
+        input.type = actionType === "NUMBER" ? "number" : "text";
+        input.required = true;
+        if (actionType === "NUMBER") input.step = "any";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn-primary";
+        button.textContent = "Esegui";
+        button.addEventListener("click", () => {
+          if (!input.reportValidity()) return;
+          void execute(actionType === "NUMBER" ? input.valueAsNumber : input.value);
+        });
+        if (action.controlTelemetry) {
+          this.actionControlUpdaters.push(() => {
+            const value = this.telemetryValues?.[action.controlTelemetry]?.value;
+            if (document.activeElement !== input && value !== undefined && value !== null) input.value = String(value);
+          });
+        }
+        controls.append(input, button);
+        row.append(label, controls, status);
+      }
+      container.appendChild(row);
+    });
+    this.actionControlUpdaters.forEach((update) => update());
+  }
+
   startTelemetryUpdates() {
     if (!this.telemetryProvider) return;
     void this.refreshTelemetry();
@@ -552,6 +655,7 @@ class InfoPointRuntime {
     this.telemetryValues = event.detail || {};
     this.renderInfoPointDescription();
     this.markers.forEach((marker) => this.updateTelemetryLabel(marker));
+    this.actionControlUpdaters.forEach((update) => update());
   }
 
   async refreshTelemetry() {
@@ -561,6 +665,7 @@ class InfoPointRuntime {
       this.telemetryValues = await this.telemetryProvider();
       this.renderInfoPointDescription();
       this.markers.forEach((marker) => this.updateTelemetryLabel(marker));
+      this.actionControlUpdaters.forEach((update) => update());
     } catch (error) {
       console.warn("Aggiornamento telemetria information point non riuscito:", error);
     } finally {
@@ -622,6 +727,10 @@ function replaceTelemetryPlaceholders(description, telemetry) {
     if (!point || point.value === undefined || point.value === null) return placeholder;
     return `${point.value}${point.unit ? ` ${point.unit}` : ""}`;
   });
+}
+
+function telemetryBoolean(value) {
+  return value === true || value === 1 || ["true", "1", "on", "active"].includes(String(value).toLowerCase());
 }
 
 function getProjectionCamera(camera) {

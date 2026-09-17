@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import random
 import re
@@ -21,6 +22,7 @@ from flask_cors import CORS
 from flask_sock import Sock
 
 from db import execute, fetch_all, fetch_one, init_db
+from mock_rpc_device import run as run_rpc_mock
 from thingsboard_service import ThingsBoardError, ThingsBoardService
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -39,6 +41,7 @@ TEXTURES_DIR = PROJECT_DIR / "public" / "texture"
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me-at-least-32-bytes")
 JWT_EXPIRES_IN = os.getenv("JWT_EXPIRES_IN", "7d")
 BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
+RPC_MOCK_AUTO_START = os.getenv("THINGSBOARD_RPC_MOCK_AUTO_START", "true").lower() == "true"
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
@@ -47,6 +50,8 @@ sock = Sock(app)
 thingsboard_service = ThingsBoardService()
 simulators: dict[str, threading.Event] = {}
 simulators_lock = threading.Lock()
+rpc_mock_threads: dict[str, threading.Thread] = {}
+rpc_mock_threads_lock = threading.Lock()
 
 
 @app.route("/api/health", methods=["GET"])
@@ -203,6 +208,8 @@ def create_experience() -> tuple[Response, int] | Response:
             timestamp,
         ),
     )
+    if device_id:
+        start_rpc_mock_listener(device_id)
 
     row = fetch_one(
         "SELECT id, title, description, device_id, created_at, updated_at FROM experiences WHERE id = ?",
@@ -444,6 +451,7 @@ def update_experience(experience_id: str) -> tuple[Response, int] | Response:
         """,
         (title, description, device_id if "deviceId" in body else row["device_id"], updated_at, experience_id, teacher["id"]),
     )
+    start_rpc_mock_listener(device_id if "deviceId" in body else row["device_id"])
 
     updated = load_teacher_experience_or_null(teacher["id"], experience_id)
     return jsonify({"experience": experience_response_from_row(updated)})
@@ -528,6 +536,34 @@ def public_experience_telemetry(experience_id: str) -> tuple[Response, int] | Re
             "deviceActive": thingsboard_service.get_device_active_status(device_id),
             "deviceConnected": True,
         })
+    except ThingsBoardError as error:
+        return jsonify({"error": str(error)}), 502
+
+
+@app.route("/api/public/experiences/<experience_id>/actions/<int:poi_index>/<int:action_index>", methods=["POST"])
+def execute_public_experience_action(experience_id: str, poi_index: int, action_index: int) -> tuple[Response, int] | Response:
+    row = load_public_experience_for_code(experience_id, request.args.get("teacherCode"))
+    if not row or not row["device_id"]:
+        return jsonify({"error": "Esperienza non autorizzata o senza device"}), 404
+
+    try:
+        config = json.loads((BASE_DIR / row["json_path"]).read_text(encoding="utf-8"))
+        action = get_configured_action(config, poi_index, action_index)
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            raise ValueError("Corpo del comando non valido")
+        value = coerce_action_value(action["actionType"], body.get("value"))
+        if not thingsboard_service.get_device_active_status(row["device_id"]):
+            return jsonify({"error": "Device inattivo: il comando non può essere eseguito"}), 409
+        rpc_response = thingsboard_service.send_rpc(row["device_id"], action["method"], value, action["executionType"])
+        return jsonify({
+            "success": True,
+            "message": (action.get("successMessage") or "Comando eseguito.")
+            if action["executionType"] == "SYNC" else "Comando inviato.",
+            "response": rpc_response,
+        })
+    except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        return jsonify({"error": str(error) or "Azione non valida"}), 400
     except ThingsBoardError as error:
         return jsonify({"error": str(error)}), 502
 
@@ -758,6 +794,54 @@ def load_public_experience_for_code(experience_id: str, access_code: Any):
         """,
         (experience_id, code),
     )
+
+
+def get_configured_action(config: dict[str, Any], poi_index: int, action_index: int) -> dict[str, Any]:
+    rules = config.get("regole")
+    if not isinstance(rules, list):
+        raise ValueError("Configurazione esperienza non valida")
+    info_rule = next((rule for rule in rules if isinstance(rule, dict) and rule.get("tipologia") == "informationPoint"), None)
+    points = info_rule.get("infoPoint") if isinstance(info_rule, dict) else None
+    if not isinstance(points, list) or not 0 <= poi_index < len(points) or action_index < 0:
+        raise ValueError("Azione non configurata")
+    point = points[poi_index]
+    actions = point.get("actions") if isinstance(point, dict) else None
+    if not isinstance(actions, list) or action_index >= len(actions):
+        raise ValueError("Azione non configurata")
+    action = actions[action_index]
+    if not isinstance(action, dict):
+        raise ValueError("Azione non valida")
+
+    method = str(action.get("method") or "").strip()
+    control_telemetry = str(action.get("controlTelemetry") or point.get("telemetria") or "").strip()
+    action_type = str(action.get("actionType") or action.get("kind") or "").upper()
+    execution_type = str(action.get("executionType") or action.get("mode") or "").upper()
+    if (not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", method)
+            or control_telemetry and not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", control_telemetry)
+            or action_type not in {"BOOLEAN", "NUMBER", "STRING"}
+            or execution_type not in {"SYNC", "ASYNC"}):
+        raise ValueError("Azione non valida")
+    return {**action, "method": method, "controlTelemetry": control_telemetry, "actionType": action_type, "executionType": execution_type}
+
+
+def coerce_action_value(action_type: str, value: Any) -> bool | float | str:
+    if action_type == "BOOLEAN":
+        if not isinstance(value, bool):
+            raise ValueError("Il comando ON/OFF richiede un valore booleano")
+        return value
+    if action_type == "NUMBER":
+        if isinstance(value, bool):
+            raise ValueError("Il comando richiede un valore numerico")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Il comando richiede un valore numerico") from error
+        if not math.isfinite(number):
+            raise ValueError("Il comando richiede un valore numerico finito")
+        return number
+    if action_type == "STRING" and isinstance(value, str) and len(value) <= 500:
+        return value
+    raise ValueError("Il comando richiede una stringa di massimo 500 caratteri")
 
 
 def get_device_details(device_id: str) -> dict[str, str]:
@@ -1010,6 +1094,29 @@ def start_cleanup_thread() -> None:
     thread.start()
 
 
+def start_rpc_mock_listener(device_id: str | None) -> None:
+    if not RPC_MOCK_AUTO_START or not device_id:
+        return
+    with rpc_mock_threads_lock:
+        current = rpc_mock_threads.get(device_id)
+        if current and current.is_alive():
+            return
+        thread = threading.Thread(
+            target=run_rpc_mock,
+            args=(device_id,),
+            daemon=True,
+            name=f"rpc-mock-{device_id[:8]}",
+        )
+        rpc_mock_threads[device_id] = thread
+        thread.start()
+        app.logger.info("[mock-device] listener RPC avviato per %s", device_id)
+
+
+def start_rpc_mock_listeners() -> None:
+    for row in fetch_all("SELECT DISTINCT device_id FROM experiences WHERE device_id IS NOT NULL"):
+        start_rpc_mock_listener(row["device_id"])
+
+
 def stream_file(file_path: Path, mime: str, filename: str):
     if not file_path.exists():
         return jsonify({"error": "File non trovato"}), 404
@@ -1043,6 +1150,7 @@ def create_ssl_context():
 def main() -> None:
     STORE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    start_rpc_mock_listeners()
     cleanup_expired_uploads()
     start_cleanup_thread()
     ssl_context = create_ssl_context()

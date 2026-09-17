@@ -204,6 +204,17 @@ export const experienceService = {
     return (await response.json()).active === true;
   },
 
+  async executePublicExperienceAction(id, teacherCode, poiIndex, actionIndex, value) {
+    const query = new URLSearchParams({ teacherCode });
+    const response = await fetch(`${getApiBase()}/public/experiences/${encodeURIComponent(id)}/actions/${poiIndex}/${actionIndex}?${query}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value })
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    return response.json();
+  },
+
   subscribeToPublicExperienceTelemetry(id, teacherCode, handlers) {
     let socket;
     let retryTimer;

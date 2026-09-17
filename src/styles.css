@@ -633,10 +633,13 @@ body.ar-mode #threeCanvas{
 
 .telemetry-label-field {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
-.telemetry-label-field label {
+.telemetry-label-field > label,
+.telemetry-label-field > span:first-child {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -644,6 +647,11 @@ body.ar-mode #threeCanvas{
   margin-bottom: 5px;
   font-size: 12px;
   font-weight: 600;
+}
+
+.telemetry-label-field > .form-select,
+.telemetry-label-field > .form-control {
+  margin-top: auto;
 }
 
 .telemetry-label-options .form-select,
@@ -685,6 +693,41 @@ body.ar-mode #threeCanvas{
   line-height: 1.25;
   pointer-events: none;
   white-space: nowrap;
+}
+
+.poi-actions-config .telemetry-label-options-grid {
+  margin-bottom: 0;
+}
+
+.poi-actions-config > div > .ctrl-section {
+  background: #fff;
+}
+
+.info-point-panel-actions {
+  margin-top: 14px;
+}
+
+.info-point-actions-title {
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 3px solid #f0a500;
+  font-weight: 700;
+}
+
+.info-point-action {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.info-point-action-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.info-point-action-status {
+  min-height: 18px;
+  font-size: 12px;
 }
 
 @media (max-width: 640px) {

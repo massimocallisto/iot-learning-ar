@@ -21,6 +21,8 @@ export class ConfigInformationPoint{
         this.infoPointDescriptionTemp = "";
         this.selectedTelemetryTemp = "";
         this.labelSettingsTemp = this.getDefaultLabelSettings();
+        this.actionsTemp = [];
+        this.actionsEditorRender = null;
         this.editingIndex = -1;
         this.ready = false;
 
@@ -176,6 +178,7 @@ export class ConfigInformationPoint{
             this.infoPointDescriptionTemp = "";
             this.selectedTelemetryTemp = "";
             this.labelSettingsTemp = this.getDefaultLabelSettings();
+            this.actionsTemp = [];
             list.replaceChildren();
             this.showDescriptionInfoPoint();
         });
@@ -185,13 +188,22 @@ export class ConfigInformationPoint{
 
             if (!this.infoPointNameTemp) return;
             if (this.infoPointTemp.size === 0) return;
+            if (this.actionsTemp.some((action) => !action.label.trim() || !/^[A-Za-z0-9_.:-]{1,100}$/.test(action.method.trim()))) {
+                window.alert("Completa la label e usa un metodo RPC valido (lettere, numeri, punto, trattino, underscore o due punti).");
+                return;
+            }
+            if (this.actionsTemp.some((action) => !action.controlTelemetry)) {
+                window.alert("Seleziona una telemetria di controllo per ogni azione.");
+                return;
+            }
 
             const infoPoint = {
                 name: this.infoPointNameTemp,
                 parte: Array.from(this.infoPointTemp),
                 descrizione: this.infoPointDescriptionTemp,
                 telemetria: this.selectedTelemetryTemp || null,
-                label: { ...this.labelSettingsTemp }
+                label: { ...this.labelSettingsTemp },
+                actions: this.actionsTemp.map((action) => ({ ...action }))
             };
 
             if(this.editingIndex >= 0){
@@ -250,6 +262,7 @@ export class ConfigInformationPoint{
         this.infoPointDescriptionTemp = "";
         this.selectedTelemetryTemp = "";
         this.labelSettingsTemp = this.getDefaultLabelSettings();
+        this.actionsTemp = [];
         this.infoPointNameTemp = "";
         this.editingIndex = -1;
         this.ready = false;
@@ -276,6 +289,7 @@ export class ConfigInformationPoint{
         this.infoPointDescriptionTemp = infoPoint.descrizione || "";
         this.selectedTelemetryTemp = infoPoint.telemetria || "";
         this.labelSettingsTemp = this.normalizeLabelSettings(infoPoint.label);
+        this.actionsTemp = (infoPoint.actions || []).map((action) => this.normalizeAction(action, infoPoint.telemetria));
         this.infoPointTemp = new Set(infoPoint.parte || []);
 
         if(this.nameInputEl) this.nameInputEl.value = this.infoPointNameTemp;
@@ -319,7 +333,10 @@ export class ConfigInformationPoint{
                     : (infoPoint.parte ? [infoPoint.parte] : []),
                 descrizione: infoPoint.descrizione || "",
                 telemetria: infoPoint.telemetria || "",
-                label: this.normalizeLabelSettings(infoPoint.label)
+                label: this.normalizeLabelSettings(infoPoint.label),
+                actions: Array.isArray(infoPoint.actions)
+                    ? infoPoint.actions.map((action) => this.normalizeAction(action, infoPoint.telemetria))
+                    : []
             }));
 
         this.report();
@@ -433,10 +450,12 @@ export class ConfigInformationPoint{
 
     onTelemetryCatalog(event){
         const detail = event.detail || {};
-        this.telemetryKeys = Array.isArray(detail.keys)
+        const telemetryKeys = Array.isArray(detail.keys)
             ? [...new Set(detail.keys.filter((key) => typeof key === "string" && key.trim()))]
                 .sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" }))
             : [];
+        const catalogChanged = telemetryKeys.join("\0") !== this.telemetryKeys.join("\0");
+        this.telemetryKeys = telemetryKeys;
         this.telemetryState = {
             deviceConnected: Boolean(detail.deviceConnected),
             loading: Boolean(detail.loading),
@@ -446,6 +465,7 @@ export class ConfigInformationPoint{
         this.updateTelemetrySelector();
         this.descriptionEditor?.setTelemetryKeys(this.telemetryKeys);
         this.descriptionEditor?.setTelemetryValues(this.telemetryValues);
+        if(catalogChanged) this.actionsEditorRender?.();
     }
 
     updateTelemetrySelector(){
@@ -539,6 +559,9 @@ export class ConfigInformationPoint{
         const labelSettings = this.createLabelSettings();
         editor.legend.insertAdjacentElement("afterend", labelSettings);
 
+        const actionsSettings = this.createActionsSettings();
+        labelSettings.insertAdjacentElement("afterend", actionsSettings);
+
         // bottone finale
         const confirm = document.createElement("button");
         confirm.textContent = "Salva";
@@ -561,6 +584,131 @@ export class ConfigInformationPoint{
             onlyWhenNear: false,
             activationDistance: 2
         };
+    }
+
+    normalizeAction(action = {}, fallbackTelemetry = ""){
+        const actionType = String(action.actionType || action.kind || "BOOLEAN").toUpperCase();
+        const executionType = String(action.executionType || action.mode || "ASYNC").toUpperCase();
+        return {
+            label: String(action.label || ""),
+            actionType: ["BOOLEAN", "NUMBER", "STRING"].includes(actionType) ? actionType : "BOOLEAN",
+            method: String(action.method || ""),
+            controlTelemetry: String(action.controlTelemetry || fallbackTelemetry || ""),
+            executionType: executionType === "SYNC" ? "SYNC" : "ASYNC",
+            successMessage: String(action.successMessage || "")
+        };
+    }
+
+    createActionsSettings(){
+        const wrapper = document.createElement("section");
+        wrapper.className = "poi-actions-config mt-3";
+
+        const heading = document.createElement("div");
+        heading.className = "fw-bold mb-2";
+        heading.textContent = "Azioni";
+        const list = document.createElement("div");
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "btn btn-success w-100";
+        add.textContent = "Aggiungi azione";
+
+        const createField = (labelText, input) => {
+            const field = document.createElement("label");
+            field.className = "telemetry-label-field";
+            const label = document.createElement("span");
+            label.textContent = labelText;
+            input.classList.add(input.tagName === "SELECT" ? "form-select" : "form-control");
+            field.append(label, input);
+            return field;
+        };
+        const createSelect = (choices, value) => {
+            const select = document.createElement("select");
+            choices.forEach(([optionValue, optionLabel]) => select.add(new Option(optionLabel, optionValue)));
+            select.value = value;
+            return select;
+        };
+
+        const render = () => {
+            list.replaceChildren();
+            this.actionsTemp.forEach((action, index) => {
+                const card = document.createElement("div");
+                card.className = "ctrl-section mb-2";
+                const grid = document.createElement("div");
+                grid.className = "telemetry-label-options-grid";
+
+                const label = document.createElement("input");
+                label.type = "text";
+                label.value = action.label;
+                label.placeholder = "Accendi LED";
+                label.addEventListener("input", () => { action.label = label.value; });
+
+                const actionType = createSelect([["BOOLEAN", "ON/OFF"], ["NUMBER", "Valore"], ["STRING", "Stringa"]], action.actionType);
+                actionType.addEventListener("change", () => { action.actionType = actionType.value; });
+
+                const method = document.createElement("input");
+                method.type = "text";
+                method.value = action.method;
+                method.placeholder = "setLed";
+                method.addEventListener("input", () => { action.method = method.value; });
+
+                const catalogLoaded = this.telemetryState.deviceConnected
+                    && !this.telemetryState.loading
+                    && !this.telemetryState.error;
+                if(catalogLoaded && !this.telemetryKeys.includes(action.controlTelemetry)){
+                    action.controlTelemetry = "";
+                }
+                const emptyTelemetryLabel = this.telemetryState.loading
+                    ? "Caricamento telemetrie..."
+                    : !this.telemetryState.deviceConnected
+                        ? "Nessun device collegato"
+                        : this.telemetryKeys.length ? "Seleziona una telemetria" : "Nessuna telemetria disponibile";
+                const telemetryChoices = [
+                    ["", emptyTelemetryLabel],
+                    ...this.telemetryKeys.map((key) => [key, key])
+                ];
+                const controlTelemetry = createSelect(telemetryChoices, action.controlTelemetry);
+                controlTelemetry.disabled = this.telemetryState.loading || !this.telemetryKeys.length;
+                controlTelemetry.addEventListener("change", () => { action.controlTelemetry = controlTelemetry.value; });
+
+                const executionType = createSelect([["ASYNC", "Asincrona"], ["SYNC", "Sincrona"]], action.executionType);
+                executionType.addEventListener("change", () => { action.executionType = executionType.value; });
+
+                const success = document.createElement("input");
+                success.type = "text";
+                success.value = action.successMessage;
+                success.placeholder = "Hai appena acceso un LED";
+                success.addEventListener("input", () => { action.successMessage = success.value; });
+
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "btn btn-outline-danger btn-sm mt-2";
+                remove.textContent = "Elimina azione";
+                remove.addEventListener("click", () => {
+                    this.actionsTemp.splice(index, 1);
+                    render();
+                });
+
+                grid.append(
+                    createField("Label", label),
+                    createField("Azione", actionType),
+                    createField("Metodo", method),
+                    createField("Telemetria di controllo", controlTelemetry),
+                    createField("Tipo", executionType),
+                    createField("Messaggio di successo", success)
+                );
+                card.append(grid, remove);
+                list.appendChild(card);
+            });
+        };
+
+        add.addEventListener("click", () => {
+            this.actionsTemp.push(this.normalizeAction({}, this.selectedTelemetryTemp));
+            render();
+        });
+        this.actionsEditorRender = render;
+        render();
+        wrapper.append(heading, list, add);
+        return wrapper;
     }
 
     normalizeLabelSettings(settings = {}){
@@ -602,11 +750,11 @@ export class ConfigInformationPoint{
         toggleLabel.textContent = "Mostrare una label della telemetria?";
         toggleRow.append(toggle, toggleLabel);
 
-        const options = document.createElement("div");
-        options.className = "telemetry-label-options ctrl-section mt-3";
         const heading = document.createElement("div");
-        heading.className = "fw-semibold mb-3";
+        heading.className = "fw-semibold mt-3 mb-2";
         heading.textContent = "Impostazioni label";
+        const options = document.createElement("div");
+        options.className = "telemetry-label-options ctrl-section";
 
         const grid = document.createElement("div");
         grid.className = "telemetry-label-options-grid";
@@ -634,9 +782,10 @@ export class ConfigInformationPoint{
         unit.textContent = "metri";
         distance.field.appendChild(unit);
         grid.append(position.field, alwaysVisible.field, onlyWhenNear.field, distance.field);
-        options.append(heading, grid);
+        options.append(grid);
 
         const updateVisibility = () => {
+            heading.hidden = !toggle.checked;
             options.hidden = !toggle.checked;
         };
         toggle.addEventListener("change", () => {
@@ -651,7 +800,7 @@ export class ConfigInformationPoint{
             this.labelSettingsTemp.activationDistance = Number.isFinite(value) && value >= 0 ? value : 0;
         });
         updateVisibility();
-        wrapper.append(title, toggleRow, options);
+        wrapper.append(title, toggleRow, heading, options);
         return wrapper;
     }
 
@@ -700,6 +849,7 @@ export class ConfigInformationPoint{
         this.telemetrySelectEl = null;
         this.telemetryHintEl = null;
         this.descriptionEditor = null;
+        this.actionsEditorRender = null;
 
     }
 

@@ -35,7 +35,8 @@ export function buildConfigJson({ information, finalInformation, infoPoints } = 
         formato: "markdown",
         descrizione: infoPoint.descrizione,
         telemetria: infoPoint.telemetria || null,
-        label: infoPoint.label || undefined
+        label: infoPoint.label || undefined,
+        actions: infoPoint.actions || []
       }))
     });
   }

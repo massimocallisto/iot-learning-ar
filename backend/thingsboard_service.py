@@ -40,6 +40,7 @@ class ThingsBoardService:
         self.base_url = os.getenv("THINGSBOARD_BASE_URL", "https://eu.thingsboard.cloud").rstrip("/")
         self.api_key = os.getenv("THINGSBOARD_API_KEY", "")
         self.timeout = float(os.getenv("THINGSBOARD_TIMEOUT_SECONDS", "10"))
+        self.rpc_timeout = max(float(os.getenv("THINGSBOARD_RPC_TIMEOUT_SECONDS", "35")), self.timeout)
         self.realtime_poll_seconds = max(float(os.getenv("THINGSBOARD_REALTIME_POLL_SECONDS", "1")), 0.25)
 
     def list_devices(self) -> list[dict[str, str]]:
@@ -153,18 +154,34 @@ class ThingsBoardService:
             yield self.get_latest_telemetry(device_id)
 
     def publish_device_telemetry(self, device_id: str, values: dict[str, Any]) -> None:
-        credentials = self._request_json(f"/api/device/{quote(device_id, safe='')}/credentials")
-        if not isinstance(credentials, dict) or credentials.get("credentialsType") != "ACCESS_TOKEN":
-            raise ThingsBoardError("Il simulatore richiede credenziali ACCESS_TOKEN sul device")
-        token = credentials.get("credentialsId")
-        if not isinstance(token, str) or not token:
-            raise ThingsBoardError("Token del device ThingsBoard non disponibile")
+        token = self.get_device_access_token(device_id)
         self._request_json(
             f"/api/v1/{quote(token, safe='')}/telemetry",
             method="POST",
             body=values,
             authenticated=False,
         )
+
+    def get_device_access_token(self, device_id: str) -> str:
+        credentials = self._request_json(f"/api/device/{quote(device_id, safe='')}/credentials")
+        if not isinstance(credentials, dict) or credentials.get("credentialsType") != "ACCESS_TOKEN":
+            raise ThingsBoardError("Il simulatore richiede credenziali ACCESS_TOKEN sul device")
+        token = credentials.get("credentialsId")
+        if not isinstance(token, str) or not token:
+            raise ThingsBoardError("Token del device ThingsBoard non disponibile")
+        return token
+
+    def send_rpc(self, device_id: str, method: str, value: Any, execution_type: str) -> Any:
+        sync = execution_type == "SYNC"
+        response = self._request_json(
+            f"/api/rpc/{'twoway' if sync else 'oneway'}/{quote(device_id, safe='')}",
+            method="POST",
+            body={"method": method, "params": {"value": value}, **({"timeout": int(self.rpc_timeout * 1000)} if sync else {"persistent": True})},
+            timeout=self.rpc_timeout + 5 if sync else self.timeout,
+        )
+        if sync and isinstance(response, dict) and response.get("success") is False:
+            raise ThingsBoardError(str(response.get("error") or "Il device ha rifiutato il comando"))
+        return response
 
     def simulated_values(self, device_id: str) -> dict[str, Any]:
         current = self.get_latest_telemetry(device_id)
@@ -181,6 +198,7 @@ class ThingsBoardService:
         method: str = "GET",
         body: dict[str, Any] | None = None,
         authenticated: bool = True,
+        timeout: float | None = None,
     ) -> Any:
         if authenticated and not self.api_key:
             raise ThingsBoardError("THINGSBOARD_API_KEY non configurata")
@@ -199,13 +217,28 @@ class ThingsBoardService:
             method=method,
         )
         try:
-            with urlopen(request, timeout=self.timeout) as response:
+            with urlopen(request, timeout=timeout or self.timeout) as response:
                 raw = response.read()
                 result = json.loads(raw.decode("utf-8")) if raw else None
         except HTTPError as error:
-            raise ThingsBoardError(f"ThingsBoard ha risposto con errore {error.code}") from error
-        except (URLError, TimeoutError, json.JSONDecodeError) as error:
+            try:
+                payload = json.loads(error.read().decode("utf-8"))
+                detail = str(payload.get("message") or "") if isinstance(payload, dict) else ""
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                detail = ""
+            if timeout is not None and (error.code in {408, 504} or "timeout" in detail.casefold()):
+                raise ThingsBoardError("Timeout RPC: il device non è connesso o non ha risposto") from error
+            raise ThingsBoardError(detail or f"ThingsBoard ha risposto con errore {error.code}") from error
+        except TimeoutError as error:
+            message = "Timeout RPC: il device non è connesso o non ha risposto" if timeout is not None else "Impossibile comunicare con ThingsBoard"
+            raise ThingsBoardError(message) from error
+        except URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                message = "Timeout RPC: il device non è connesso o non ha risposto" if timeout is not None else "Impossibile comunicare con ThingsBoard"
+                raise ThingsBoardError(message) from error
             raise ThingsBoardError("Impossibile comunicare con ThingsBoard") from error
+        except json.JSONDecodeError as error:
+            raise ThingsBoardError("Risposta JSON non valida ricevuta da ThingsBoard") from error
 
         return result
 def _is_number(value: Any) -> bool:

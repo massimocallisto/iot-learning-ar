@@ -243,6 +243,30 @@ https://192.168.1.50:3001
 
 ## Available commands
 
+### Device mock RPC
+
+Il backend avvia automaticamente un listener RPC mock per ogni device collegato a un'esperienza. Non serve quindi un secondo comando durante lo sviluppo.
+
+Se il device reale implementa già le RPC, disabilita il mock automatico in `backend/.env`:
+
+```text
+THINGSBOARD_RPC_MOCK_AUTO_START=false
+```
+
+Per avviarlo manualmente senza il backend:
+
+```powershell
+.\backend\.venv\Scripts\python.exe backend\mock_rpc_device.py DEVICE_ID
+```
+
+In modalità manuale il mock deve restare in esecuzione mentre provi le azioni. Il simulatore nell'interfaccia resta indipendente e genera soltanto telemetria. In alternativa puoi impostare `THINGSBOARD_DEVICE_TOKEN` e avviare lo script senza argomenti.
+
+Il mock accetta qualsiasi metodo come operazione di set: per esempio `setHumidity` salva e pubblica la telemetria `humidity`. Alcuni alias e comportamenti dimostrativi (`setLed`, `setTemperatura`) sono preconfigurati; per scegliere una chiave telemetrica diversa senza modificare il codice:
+
+```powershell
+$env:MOCK_RPC_METHODS_JSON='{"setFan":"fan"}'
+```
+
 ### Start frontend in HTTPS mode
 
 ```bash
