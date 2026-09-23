@@ -188,7 +188,7 @@ export class ConfigInformationPoint{
 
             if (!this.infoPointNameTemp) return;
             if (this.infoPointTemp.size === 0) return;
-            if (this.actionsTemp.some((action) => !action.label.trim() || !/^[A-Za-z0-9_.:-]{1,100}$/.test(action.method.trim()))) {
+            if (this.actionsTemp.some((action) => !action.label.trim() || !/^[\p{L}\p{N}_.:-]{1,100}$/u.test(action.method.trim()))) {
                 window.alert("Completa la label e usa un metodo RPC valido (lettere, numeri, punto, trattino, underscore o due punti).");
                 return;
             }
@@ -599,6 +599,15 @@ export class ConfigInformationPoint{
         };
     }
 
+    actionTypeForTelemetry(key){
+        const value = this.telemetryValues?.[key]?.value;
+        if(value == null) return null;
+        const normalized = typeof value === "string" ? value.trim() : value;
+        if(typeof value === "boolean" || ["true", "false"].includes(String(normalized).toLowerCase())) return "BOOLEAN";
+        if(normalized !== "" && Number.isFinite(Number(normalized))) return "NUMBER";
+        return "STRING";
+    }
+
     createActionsSettings(){
         const wrapper = document.createElement("section");
         wrapper.className = "poi-actions-config mt-3";
@@ -639,7 +648,7 @@ export class ConfigInformationPoint{
                 const label = document.createElement("input");
                 label.type = "text";
                 label.value = action.label;
-                label.placeholder = "Accendi LED";
+                label.placeholder = "Nome dell'azione";
                 label.addEventListener("input", () => { action.label = label.value; });
 
                 const actionType = createSelect([["BOOLEAN", "ON/OFF"], ["NUMBER", "Valore"], ["STRING", "Stringa"]], action.actionType);
@@ -648,7 +657,7 @@ export class ConfigInformationPoint{
                 const method = document.createElement("input");
                 method.type = "text";
                 method.value = action.method;
-                method.placeholder = "setLed";
+                method.placeholder = "nomeMetodoRPC";
                 method.addEventListener("input", () => { action.method = method.value; });
 
                 const catalogLoaded = this.telemetryState.deviceConnected
@@ -668,7 +677,11 @@ export class ConfigInformationPoint{
                 ];
                 const controlTelemetry = createSelect(telemetryChoices, action.controlTelemetry);
                 controlTelemetry.disabled = this.telemetryState.loading || !this.telemetryKeys.length;
-                controlTelemetry.addEventListener("change", () => { action.controlTelemetry = controlTelemetry.value; });
+                controlTelemetry.addEventListener("change", () => {
+                    action.controlTelemetry = controlTelemetry.value;
+                    action.actionType = this.actionTypeForTelemetry(action.controlTelemetry) || action.actionType;
+                    actionType.value = action.actionType;
+                });
 
                 const executionType = createSelect([["ASYNC", "Asincrona"], ["SYNC", "Sincrona"]], action.executionType);
                 executionType.addEventListener("change", () => { action.executionType = executionType.value; });
@@ -676,7 +689,7 @@ export class ConfigInformationPoint{
                 const success = document.createElement("input");
                 success.type = "text";
                 success.value = action.successMessage;
-                success.placeholder = "Hai appena acceso un LED";
+                success.placeholder = "Comando eseguito correttamente";
                 success.addEventListener("input", () => { action.successMessage = success.value; });
 
                 const remove = document.createElement("button");
@@ -702,7 +715,9 @@ export class ConfigInformationPoint{
         };
 
         add.addEventListener("click", () => {
-            this.actionsTemp.push(this.normalizeAction({}, this.selectedTelemetryTemp));
+            const action = this.normalizeAction({}, this.selectedTelemetryTemp);
+            action.actionType = this.actionTypeForTelemetry(action.controlTelemetry) || action.actionType;
+            this.actionsTemp.push(action);
             render();
         });
         this.actionsEditorRender = render;

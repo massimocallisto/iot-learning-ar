@@ -52,11 +52,11 @@ def telemetry_key(method: str) -> str:
     return name[:1].lower() + name[1:]
 
 
-def react(method: str, value) -> dict:
-    if method == "setLed":
+def react(method: str, value, control_telemetry: str = "") -> dict:
+    if method == "setLed" and not control_telemetry:
         STATE.update(led_on=value, statoLED=value, lux=150 if value else 20)
         return {"statoLED": STATE["statoLED"], "lux": STATE["lux"]}
-    key = telemetry_key(method)
+    key = control_telemetry or telemetry_key(method)
     STATE[key] = value
     return {key: STATE[key]}
 
@@ -78,7 +78,7 @@ def run(device_id: str | None = None) -> None:
             method = str(command.get("method") or "")
             params = command.get("params") if isinstance(command.get("params"), dict) else {}
             value = params.get("value")
-            telemetry = react(method, value)
+            telemetry = react(method, value, str(params.get("controlTelemetry") or ""))
             response = {"success": True, "method": method}
             if request_id is not None:
                 try:
@@ -100,6 +100,7 @@ if __name__ == "__main__":
         assert react("setTemperatura", 24.5) == {"temperature": 24.5}
         assert react("setHumidity", 50) == {"humidity": 50}
         assert react("changeMode", "eco") == {"changeMode": "eco"}
+        assert react("setTemperaturaz", 24.5, "temperature") == {"temperature": 24.5}
         print("OK")
     else:
         run(sys.argv[1] if len(sys.argv) > 1 else None)

@@ -555,7 +555,9 @@ def execute_public_experience_action(experience_id: str, poi_index: int, action_
         value = coerce_action_value(action["actionType"], body.get("value"))
         if not thingsboard_service.get_device_active_status(row["device_id"]):
             return jsonify({"error": "Device inattivo: il comando non può essere eseguito"}), 409
-        rpc_response = thingsboard_service.send_rpc(row["device_id"], action["method"], value, action["executionType"])
+        rpc_response = thingsboard_service.send_rpc(
+            row["device_id"], action["method"], value, action["executionType"], action["controlTelemetry"]
+        )
         return jsonify({
             "success": True,
             "message": (action.get("successMessage") or "Comando eseguito.")
@@ -816,7 +818,7 @@ def get_configured_action(config: dict[str, Any], poi_index: int, action_index: 
     control_telemetry = str(action.get("controlTelemetry") or point.get("telemetria") or "").strip()
     action_type = str(action.get("actionType") or action.get("kind") or "").upper()
     execution_type = str(action.get("executionType") or action.get("mode") or "").upper()
-    if (not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", method)
+    if (not re.fullmatch(r"[\w.:-]{1,100}", method)
             or control_telemetry and not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", control_telemetry)
             or action_type not in {"BOOLEAN", "NUMBER", "STRING"}
             or execution_type not in {"SYNC", "ASYNC"}):

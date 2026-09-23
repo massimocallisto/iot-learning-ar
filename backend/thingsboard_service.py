@@ -171,12 +171,13 @@ class ThingsBoardService:
             raise ThingsBoardError("Token del device ThingsBoard non disponibile")
         return token
 
-    def send_rpc(self, device_id: str, method: str, value: Any, execution_type: str) -> Any:
+    def send_rpc(self, device_id: str, method: str, value: Any, execution_type: str, control_telemetry: str = "") -> Any:
         sync = execution_type == "SYNC"
+        params = {"value": value, **({"controlTelemetry": control_telemetry} if control_telemetry else {})}
         response = self._request_json(
             f"/api/rpc/{'twoway' if sync else 'oneway'}/{quote(device_id, safe='')}",
             method="POST",
-            body={"method": method, "params": {"value": value}, **({"timeout": int(self.rpc_timeout * 1000)} if sync else {"persistent": True})},
+            body={"method": method, "params": params, **({"timeout": int(self.rpc_timeout * 1000)} if sync else {"persistent": True})},
             timeout=self.rpc_timeout + 5 if sync else self.timeout,
         )
         if sync and isinstance(response, dict) and response.get("success") is False:
